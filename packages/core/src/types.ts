@@ -84,3 +84,12 @@ export interface PackLayout {
   /** pages[page - 1]. */
   pages: PageLayout[]
 }
+
+/**
+ * search-text.json: every ayah in the standard (imla'i) spelling, which is how
+ * people type, for search and for showing results. [surah, ayah, page, text]
+ */
+export interface SearchText {
+  v: 1
+  ayahs: [number, number, number, string][]
+}

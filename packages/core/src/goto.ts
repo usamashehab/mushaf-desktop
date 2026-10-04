@@ -108,3 +108,31 @@ export function findSurah(meta: QuranMeta, name: string): number | undefined {
 
   return undefined
 }
+
+/**
+ * Surahs whose name holds `query`, best first: exact names, then names it begins,
+ * then names that contain it. For the search box's suggestions.
+ */
+export function matchSurahs(meta: QuranMeta, query: string, limit = 5): number[] {
+  const isArabic = /[\u0600-\u06FF]/.test(query)
+  const wanted = (isArabic ? arabicKeys(toLatinDigits(query)) : latinKeys(query)).filter(key => key.length >= 2)
+  if (wanted.length === 0) {
+    return []
+  }
+  const ranked: [number, number][] = []
+  meta.surahs.forEach((surah, i) => {
+    const keys = isArabic ? arabicKeys(surah.nameArabic) : [...latinKeys(surah.nameSimple), foldLatin(surah.nameEnglish)]
+    const rank = keys.some(key => wanted.includes(key))
+      ? 0
+      : keys.some(key => wanted.some(want => key.startsWith(want)))
+        ? 1
+        : keys.some(key => wanted.some(want => want.length >= 3 && key.includes(want)))
+          ? 2
+          : -1
+    if (rank !== -1) {
+      ranked.push([rank, i + 1])
+    }
+  })
+
+  return ranked.sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, limit).map(([, surah]) => surah)
+}

@@ -64,6 +64,8 @@ export interface SourceAyah {
 
 export interface Source {
   chapters: ApiChapter[]
+  /** Every ayah in the standard spelling, by "surah:ayah". */
+  imlaei: Map<string, string>
   /** Every ayah, in order. */
   ayahs: SourceAyah[]
   /** Every word, in reading order. */
@@ -89,6 +91,12 @@ export async function loadSource(cache: string): Promise<Source> {
     `${API}/chapters?language=en`,
     join(cache, 'chapters.json'),
   )
+
+  const { verses: plain } = await cachedJson<{ verses: { verse_key: string; text_imlaei: string }[] }>(
+    `${API}/quran/verses/imlaei`,
+    join(cache, 'imlaei.json'),
+  )
+  const imlaei = new Map(plain.map(verse => [verse.verse_key, verse.text_imlaei]))
 
   const verses = new Map<string, ApiVerse>()
   for (const { verses: list } of responses) {
@@ -124,5 +132,5 @@ export async function loadSource(cache: string): Promise<Source> {
     }
   }
 
-  return { chapters: chapters.sort((a, b) => a.id - b.id), ayahs, words }
+  return { chapters: chapters.sort((a, b) => a.id - b.id), imlaei, ayahs, words }
 }

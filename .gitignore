@@ -6,3 +6,7 @@ target/
 .DS_Store
 test-results/
 playwright-report/
+
+# Tauri
+apps/desktop/src-tauri/gen/
+apps/desktop/dist/

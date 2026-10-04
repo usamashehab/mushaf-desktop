@@ -1,17 +1,14 @@
 import type { Settings } from '@mushaf/core'
-import type { PackManifest } from '@mushaf/packs'
 import type { Platform } from '@mushaf/reader'
+
+import { extraFontPath, pageFontPath } from './fonts.ts'
 
 const KEY = 'mushaf.settings'
 
 /** The reader in a plain browser: fonts from the dev server, settings in localStorage. */
 export const webPlatform: Platform = {
-  pageFontUrl: (pack: PackManifest, page: number) => `/fonts/${pack.id}/p${page}.${pack.fonts.format}`,
-  extraFontUrl: (pack: PackManifest, which) => {
-    const name = pack.extras[which].url.split('/').at(-1) ?? ''
-
-    return `/fonts/extras/${name}`
-  },
+  pageFontUrl: (pack, page) => `/fonts/${pageFontPath(pack, page)}`,
+  extraFontUrl: (pack, which) => `/fonts/${extraFontPath(pack, which)}`,
   loadSettings: async () => {
     try {
       return JSON.parse(localStorage.getItem(KEY) ?? 'null') as unknown

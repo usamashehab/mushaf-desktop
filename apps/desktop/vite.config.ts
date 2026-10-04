@@ -33,5 +33,5 @@ export default defineConfig({
   // data/ (quran-meta.json, packs/) is served as is and copied into the build.
   publicDir: join(ROOT, 'data'),
   clearScreen: false,
-  server: { port: 5173, strictPort: true },
+  server: { host: '127.0.0.1', port: 5173, strictPort: true },
 })

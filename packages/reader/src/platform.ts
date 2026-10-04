@@ -1,4 +1,4 @@
-import type { PackLayout, QuranMeta, Settings } from '@mushaf/core'
+import type { PackLayout, QuranMeta, SearchText, Settings } from '@mushaf/core'
 import type { PackManifest } from '@mushaf/packs'
 
 /**
@@ -20,4 +20,6 @@ export interface ReaderData {
   meta: QuranMeta
   manifest: PackManifest
   layout: PackLayout
+  /** For search; without it the search box only goes to places. */
+  searchText?: SearchText
 }

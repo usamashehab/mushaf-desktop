@@ -1,0 +1,133 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #ece7dc;
+  font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  overscroll-behavior: none;
+  user-select: none;
+}
+
+input,
+textarea,
+.search-item-text,
+.mushaf-word {
+  user-select: text;
+}
+
+.setup {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 30%, #f6f2e8, #ece7dc 70%);
+  color: #1c1a16;
+}
+
+.setup-card {
+  width: min(440px, calc(100vw - 48px));
+  padding: 36px 32px 28px;
+  border-radius: 20px;
+  background: #fffdf7;
+  box-shadow: 0 1px 2px rgba(60, 45, 20, 0.06), 0 12px 40px rgba(60, 45, 20, 0.12);
+  text-align: center;
+}
+
+.setup-star {
+  width: 56px;
+  height: 56px;
+  fill: #1f6b53;
+}
+
+.setup h1 {
+  margin: 12px 0 8px;
+  font-size: 22px;
+}
+
+.setup p {
+  margin: 0 0 22px;
+  color: #6f6858;
+  line-height: 1.8;
+}
+
+.setup-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #ece6d8;
+  overflow: hidden;
+}
+
+.setup-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #1f6b53, #3a9474);
+  transition: width 200ms;
+  margin-inline-start: auto;
+}
+
+.setup-numbers {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #6f6858;
+  font-variant-numeric: tabular-nums;
+}
+
+.setup-error {
+  margin-top: 20px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #fbefe9;
+}
+
+.setup-error p {
+  margin-bottom: 8px;
+  color: #8a3b24;
+}
+
+.setup-error code {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: #8a3b24;
+  word-break: break-word;
+}
+
+.setup-error button {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f6b53;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.boot-error {
+  padding: 40px;
+  color: #8a3b24;
+  font-family: system-ui, sans-serif;
+}
+
+.crash {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: #8a3b24;
+  word-break: break-word;
+}
+
+.setup-error-actions button {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f6b53;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}

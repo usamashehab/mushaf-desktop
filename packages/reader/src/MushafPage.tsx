@@ -1,6 +1,6 @@
 import { useEffect, useState, type ClipboardEvent } from 'react'
 
-import { juzLabel, pageInfo, quarterLabel, toArabicDigits, type AyahRef, type LayoutLine, type LayoutWord } from '@mushaf/core'
+import { juzLabel, pageInfo, quarterLabel, toArabicDigits, type AyahRef, type Bookmark, type LayoutLine, type LayoutWord } from '@mushaf/core'
 
 import { isFontReady, loadFont } from './fonts.ts'
 import { LINE_PITCH, PAGE_BOX, textWidthEm } from './geometry.ts'
@@ -48,12 +48,15 @@ interface PageProps {
   fontSize: number
   /** The ayah picked by a click, kept highlighted. */
   active: AyahRef | undefined
-  onPickAyah: (ayah: AyahRef | undefined) => void
+  /** A click on an ayah, with where it was clicked. */
+  onPickAyah: (ayah: AyahRef, x: number, y: number) => void
   loadingText: string
+  /** Bookmarks on this page: a ribbon for the page, a tint for each ayah. */
+  bookmarks?: Bookmark[]
 }
 
 /** One Mushaf page, drawn with its own font so every line matches the print. */
-export function MushafPage({ data, platform, page, fontSize, active, onPickAyah, loadingText }: PageProps) {
+export function MushafPage({ data, platform, page, fontSize, active, onPickAyah, loadingText, bookmarks = [] }: PageProps) {
   const ready = usePageFont(data, platform, page)
   const [hover, setHover] = useState<string>()
   const lines = data.layout.pages[page - 1]?.lines ?? []
@@ -63,6 +66,8 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
   const activeKey = active ? ayahKey(active) : undefined
   const family = pageFamily(data, page)
   const isOpening = page <= 2
+  const markedAyahs = new Map(bookmarks.filter(mark => mark.ayah).map(mark => [`${mark.surah}:${mark.ayah}`, mark.color]))
+  const ribbon = bookmarks.find(mark => mark.page === page)
 
   // Copy gives the Quran's text, not the glyph codes the page font draws.
   const copy = (event: ClipboardEvent<HTMLElement>) => {
@@ -82,7 +87,14 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
   const word = (w: LayoutWord, index: number) => {
     const [s, a, , code, text, kind] = w
     const key = `${s}:${a}`
-    const classes = ['mushaf-word', kind === 1 ? 'mushaf-end' : '', key === hover ? 'is-hover' : '', key === activeKey ? 'is-active' : '']
+    const marked = markedAyahs.get(key)
+    const classes = [
+      'mushaf-word',
+      kind === 1 ? 'mushaf-end' : '',
+      key === hover ? 'is-hover' : '',
+      key === activeKey ? 'is-active' : '',
+      marked ? 'is-marked' : '',
+    ]
 
     return (
       <span
@@ -90,10 +102,11 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
         className={classes.filter(Boolean).join(' ')}
         data-ayah={key}
         data-text={text}
+        data-color={marked}
         aria-label={text}
         onMouseEnter={() => setHover(key)}
         onMouseLeave={() => setHover(undefined)}
-        onClick={() => onPickAyah(key === activeKey ? undefined : { surah: s, ayah: a })}
+        onClick={event => onPickAyah({ surah: s, ayah: a }, event.clientX, event.clientY)}
       >
         {code}
       </span>
@@ -156,6 +169,7 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
         <span className="mushaf-chrome">{toArabicDigits(page)}</span>
       </footer>
       {info?.quarterStart ? <aside className="mushaf-quarter">۞ {quarterLabel(info.quarterStart)}</aside> : null}
+      {ribbon ? <span className="mushaf-ribbon" data-color={ribbon.color} aria-hidden="true" /> : null}
     </article>
   )
 }
@@ -177,14 +191,13 @@ function Basmala({ data, platform }: { data: ReaderData; platform: Platform }) {
   )
 }
 
-/** The frame a surah's name sits in. */
+/** The frame a surah's name sits in: a cartouche with pointed ends. */
 function SurahFrame() {
   return (
     <svg className="mushaf-surah-frame" viewBox="0 0 400 40" preserveAspectRatio="none" aria-hidden="true">
-      <rect x="1" y="3" width="398" height="34" rx="17" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="6" y="7" width="388" height="26" rx="13" fill="none" stroke="currentColor" strokeWidth="0.6" />
-      <circle cx="22" cy="20" r="4" fill="none" stroke="currentColor" strokeWidth="0.8" />
-      <circle cx="378" cy="20" r="4" fill="none" stroke="currentColor" strokeWidth="0.8" />
+      <path className="frame-fill" d="M16 3H384L398 20L384 37H16L2 20Z" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M22 7.5H378L389 20L378 32.5H22L11 20Z" fill="none" stroke="currentColor" strokeWidth="0.6" />
+      <path d="M30 20l5-5 5 5-5 5zM360 20l5-5 5 5-5 5z" fill="currentColor" />
     </svg>
   )
 }

@@ -145,7 +145,7 @@ describe('settings', () => {
     expect(settings.theme).toBe('day')
     expect(settings.zoom).toBe(3)
     expect('extra' in settings).toBe(false)
-    expect(settings.bookmarks).toEqual([{ page: 42, surah: 2, ayah: 255, createdAt: 5 }])
+    expect(settings.bookmarks).toEqual([{ id: 'b5-42', page: 42, surah: 2, ayah: 255, color: 'gold', createdAt: 5 }])
     expect(settings.agents['codex']).toEqual({ enabled: true, openAfterMinutes: 0 })
     expect(settings.agents['claude']).toEqual({ enabled: false, openAfterMinutes: 2 })
   })

@@ -4,7 +4,7 @@
 /** Distance between lines. */
 export const LINE_PITCH = 1.8
 /** Room a full line gets over its glyphs' width: the word spaces, and the widest lines. */
-export const LINE_SLACK = 1.06
+export const LINE_SLACK = 1.07
 export const LINES = 15
 const PAD_X = 1.6
 const PAD_Y = 1.1

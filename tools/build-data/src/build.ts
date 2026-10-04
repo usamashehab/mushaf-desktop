@@ -2,6 +2,7 @@
 //   data/quran-meta.json             surahs, the page of every ayah, juz/hizb/sajdah
 //   data/packs/qcf-v2/layout.json    every page, line by line, as glyph codes + text
 //   data/packs/qcf-v2/manifest.json  the pack's fonts, with sizes and sha256
+//   data/search-text.json            every ayah in the standard spelling, for search
 //
 //   pnpm build-data            (downloads land in .cache/, so a rebuild is offline)
 //
@@ -11,7 +12,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { PackLayout } from '@mushaf/core'
+import type { PackLayout, SearchText } from '@mushaf/core'
 import { checkManifest, type PackFile, type PackManifest } from '@mushaf/packs'
 
 import { cached, sha256 } from './fetch.ts'
@@ -105,11 +106,27 @@ async function main() {
     process.exit(1)
   }
 
+  const searchText: SearchText = {
+    v: 1,
+    ayahs: source.ayahs.map(({ surah, ayah }) => [
+      surah,
+      ayah,
+      meta.ayahPages[surah - 1]?.[ayah - 1] ?? 0,
+      source.imlaei.get(`${surah}:${ayah}`) ?? '',
+    ]),
+  }
+  const blank = searchText.ayahs.filter(([, , page, text]) => page === 0 || text === '')
+  if (blank.length > 0) {
+    console.error(`no search text for ${blank.length} ayah(s), first ${blank[0]?.slice(0, 2).join(':')}`)
+    process.exit(1)
+  }
+
   const layout: PackLayout = { v: 1, pack: manifest.id, lineEm: Math.round(full * 1000) / 1000, pages }
   const packDir = join(OUT, 'packs', manifest.id)
   await mkdir(packDir, { recursive: true })
   const written = [
     [join(OUT, 'quran-meta.json'), json(meta)],
+    [join(OUT, 'search-text.json'), json(searchText)],
     [join(packDir, 'layout.json'), json(layout)],
     [join(packDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`],
   ] as const

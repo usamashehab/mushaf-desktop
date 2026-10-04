@@ -4,11 +4,16 @@ export type Theme = 'day' | 'night' | 'sepia'
 export type Spread = 'auto' | 'single' | 'double'
 export type Language = 'ar' | 'en'
 
+export const BOOKMARK_COLORS = ['gold', 'green', 'blue', 'rose', 'violet'] as const
+export type BookmarkColor = (typeof BOOKMARK_COLORS)[number]
+
 export interface Bookmark {
+  id: string
   page: number
   surah?: number
   ayah?: number
   label?: string
+  color: BookmarkColor
   /** ms since the epoch. */
   createdAt: number
 }
@@ -83,7 +88,13 @@ function bookmark(value: unknown): Bookmark | undefined {
   if (!isRecord(value) || typeof value['page'] !== 'number' || !isPage(value['page'])) {
     return undefined
   }
-  const out: Bookmark = { page: value['page'], createdAt: number(value['createdAt'], 0, 0, Number.MAX_SAFE_INTEGER) }
+  const createdAt = number(value['createdAt'], 0, 0, Number.MAX_SAFE_INTEGER)
+  const out: Bookmark = {
+    id: typeof value['id'] === 'string' && value['id'] !== '' ? value['id'] : `b${createdAt}-${value['page']}`,
+    page: value['page'],
+    color: pick(value['color'], BOOKMARK_COLORS, 'gold'),
+    createdAt,
+  }
   if (typeof value['surah'] === 'number' && typeof value['ayah'] === 'number') {
     out.surah = value['surah']
     out.ayah = value['ayah']
@@ -116,7 +127,9 @@ export function migrateSettings(stored: unknown): Settings {
     v: 1,
     page: typeof raw['page'] === 'number' ? clampPage(raw['page']) : d.page,
     bookmarks: Array.isArray(raw['bookmarks'])
-      ? raw['bookmarks'].map(bookmark).filter((b): b is Bookmark => b !== undefined)
+      ? raw['bookmarks']
+          .map(bookmark)
+          .filter((b, i, all): b is Bookmark => b !== undefined && all.findIndex(other => other?.id === b.id) === i)
       : [],
     theme: pick(raw['theme'], ['day', 'night', 'sepia'] as const, d.theme),
     zoom: number(raw['zoom'], d.zoom, 0.5, 3),

@@ -1,5 +1,7 @@
+export * from './bookmarks.ts'
 export * from './goto.ts'
 export * from './navigation.ts'
+export * from './search.ts'
 export * from './settings.ts'
 export * from './text.ts'
 export * from './types.ts'
