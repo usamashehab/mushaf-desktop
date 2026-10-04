@@ -17,3 +17,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+
+  # Every page in Chromium and WebKit: no line may overflow its page. The screenshot
+  # comparisons run locally only, since the page chrome's system font differs on CI.
+  pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: mushaf-cache-${{ hashFiles('tools/build-data/src/**') }}
+          restore-keys: mushaf-cache-
+      - run: pnpm build-data
+      - run: git diff --exit-code data/
+      - run: pnpm exec playwright install --with-deps chromium webkit
+      - run: pnpm test:visual --grep overflows

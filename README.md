@@ -19,9 +19,12 @@ The fonts (93 MB) are downloaded once on first launch and kept offline after.
 ## Repo
 
 ```
+apps/desktop/       the app; for now a web page served by Vite (the Tauri shell comes next)
 packages/core/      platform-free logic: data types, go to ("2:255", "البقرة", "juz 3"), settings
 packages/packs/     Mushaf packs: the manifest a style of Mushaf is described by
+packages/reader/    the reader: React components that draw exact pages, no platform code
 tools/build-data/   builds data/ from the Quran.com API and checks every page
+tests/visual/       every page in Chromium and WebKit: screenshots, and no line overflowing
 data/               the built data, committed: quran-meta.json, packs/qcf-v2/{layout,manifest}.json
 ```
 
@@ -31,7 +34,12 @@ pnpm install
 pnpm test
 pnpm typecheck
 pnpm build-data   # rebuild data/ (downloads ~95 MB into .cache/ the first time)
+pnpm dev          # the reader at http://127.0.0.1:5173 (needs build-data's fonts in .cache/)
+pnpm test:visual  # screenshots and overflow checks (first: pnpm exec playwright install chromium webkit)
 ```
+
+Reader keys: ← next page, → previous (a Mushaf turns leftward), PgDn/PgUp, Home/End,
+Ctrl+G or / to go to, + and − to zoom, 0 to reset, D for the theme, B to bookmark.
 
 The build fails without writing anything when the data doesn't add up: 604 pages,
 6236 ayahs in reading order, every glyph code present in its page font, no line

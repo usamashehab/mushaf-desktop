@@ -1,0 +1,28 @@
+{
+  "name": "@mushaf/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Mushaf desktop app. For now a web page served by Vite; the Tauri shell comes next.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@mushaf/core": "workspace:*",
+    "@mushaf/packs": "workspace:*",
+    "@mushaf/reader": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
+}

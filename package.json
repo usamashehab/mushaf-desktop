@@ -10,9 +10,12 @@
   "scripts": {
     "build-data": "node tools/build-data/src/build.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/core && tsc -p packages/packs && tsc -p tools/build-data"
+    "typecheck": "tsc -p packages/core && tsc -p packages/packs && tsc -p packages/reader && tsc -p tools/build-data && tsc -p apps/desktop",
+    "test:visual": "playwright test -c tests/visual",
+    "dev": "pnpm --dir apps/desktop dev"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
   }

@@ -105,7 +105,7 @@ async function main() {
     process.exit(1)
   }
 
-  const layout: PackLayout = { v: 1, pack: manifest.id, pages }
+  const layout: PackLayout = { v: 1, pack: manifest.id, lineEm: Math.round(full * 1000) / 1000, pages }
   const packDir = join(OUT, 'packs', manifest.id)
   await mkdir(packDir, { recursive: true })
   const written = [

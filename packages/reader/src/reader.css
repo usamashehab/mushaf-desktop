@@ -1,0 +1,252 @@
+.mushaf-reader {
+  --app: #ebe6d9;
+  --paper: #fffdf6;
+  --ink: #1d1b16;
+  --muted: #6f6656;
+  --accent: #8a6a32;
+  --hover: rgba(138, 106, 50, 0.14);
+  --active: rgba(138, 106, 50, 0.28);
+  --bar: #f7f3e8;
+  --line: #d9cfb8;
+
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--app);
+  color: var(--ink);
+  font-family: system-ui, 'Segoe UI', 'Noto Sans Arabic', sans-serif;
+}
+
+.mushaf-reader[data-theme='sepia'] {
+  --app: #ddd1b4;
+  --paper: #f3e9d2;
+  --ink: #3a2e1d;
+  --muted: #7a6a50;
+  --bar: #eadfc4;
+  --line: #cbb98f;
+}
+
+.mushaf-reader[data-theme='night'] {
+  --app: #0c0d10;
+  --paper: #17191e;
+  --ink: #e9e4d6;
+  --muted: #9a927f;
+  --accent: #c9a86a;
+  --hover: rgba(201, 168, 106, 0.16);
+  --active: rgba(201, 168, 106, 0.3);
+  --bar: #121318;
+  --line: #2c2e35;
+}
+
+.mushaf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.mushaf-toolbar input,
+.mushaf-toolbar select,
+.mushaf-toolbar button,
+.mushaf-bookmarks button {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-height: 30px;
+}
+
+.mushaf-toolbar button {
+  min-width: 32px;
+  cursor: pointer;
+}
+
+.mushaf-toolbar button:hover,
+.mushaf-toolbar button.is-on {
+  border-color: var(--accent);
+}
+
+.mushaf-goto input {
+  width: min(320px, 50vw);
+}
+
+.mushaf-toolbar-gap {
+  flex: 1;
+}
+
+.mushaf-page-number {
+  min-width: 3ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mushaf-message {
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--active);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.mushaf-bookmarks {
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.mushaf-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+}
+
+.mushaf-spread {
+  display: flex;
+  gap: 1em;
+}
+
+.mushaf-page {
+  position: relative;
+  box-sizing: content-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 0.3em;
+  box-shadow: 0 0.1em 0.6em rgba(0, 0, 0, 0.18);
+  outline: 0.06em solid var(--line);
+  outline-offset: -0.7em;
+}
+
+.mushaf-page-head,
+.mushaf-page-foot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  direction: rtl;
+}
+
+.mushaf-chrome {
+  font-size: 0.55em;
+}
+
+.mushaf-page-foot {
+  justify-content: center;
+}
+
+.mushaf-lines {
+  display: flex;
+  flex-direction: column;
+  direction: rtl;
+  color: var(--ink);
+}
+
+.mushaf-page.is-opening .mushaf-lines {
+  justify-content: center;
+}
+
+.mushaf-lines.is-loading {
+  align-items: center;
+  justify-content: center;
+}
+
+.mushaf-loading {
+  font-family: system-ui, sans-serif;
+  font-size: 0.5em;
+  color: var(--muted);
+}
+
+.mushaf-line {
+  height: var(--pitch);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.mushaf-line.is-centred {
+  justify-content: center;
+  gap: 0.22em;
+}
+
+.mushaf-word {
+  cursor: pointer;
+  border-radius: 0.15em;
+  transition: background 120ms;
+}
+
+.mushaf-word.is-hover {
+  background: var(--hover);
+}
+
+.mushaf-word.is-active {
+  background: var(--active);
+}
+
+.mushaf-surah-header {
+  position: relative;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.mushaf-surah-frame {
+  position: absolute;
+  inset: 0.12em 0;
+  width: 100%;
+  height: calc(100% - 0.24em);
+}
+
+.mushaf-surah-name {
+  position: relative;
+  font-family: 'mushaf-surah-names';
+  font-feature-settings: 'liga' 1;
+  font-size: 1.15em;
+  color: var(--ink);
+  direction: ltr;
+}
+
+.mushaf-basmala {
+  justify-content: center;
+}
+
+.mushaf-basmala-text {
+  display: flex;
+  gap: 0.3em;
+  direction: rtl;
+}
+
+.mushaf-quarter {
+  position: absolute;
+  top: 50%;
+  right: 0.35em;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font-size: 0.45em;
+  color: var(--accent);
+}
+
+/* Even pages face left in a spread: their margin label goes on the outer, left edge. */
+.mushaf-page.is-left .mushaf-quarter {
+  right: auto;
+  left: 0.35em;
+}

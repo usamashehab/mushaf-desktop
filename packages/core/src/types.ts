@@ -76,6 +76,11 @@ export interface PageLayout {
 export interface PackLayout {
   v: 1
   pack: string
+  /**
+   * How wide a full line draws in its page font, in em (the median over all lines).
+   * The reader sizes the font so a full line fills the page's width.
+   */
+  lineEm: number
   /** pages[page - 1]. */
   pages: PageLayout[]
 }
