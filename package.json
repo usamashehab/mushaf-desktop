@@ -1,0 +1,19 @@
+{
+  "name": "mushaf-desktop",
+  "private": true,
+  "description": "The Madinah Mushaf on your desktop, opened by your coding agents while they work.",
+  "license": "MIT",
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build-data": "node tools/build-data/src/build.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/core && tsc -p packages/packs && tsc -p tools/build-data"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

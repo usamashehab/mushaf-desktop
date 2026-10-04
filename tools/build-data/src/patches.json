@@ -1,0 +1,10 @@
+{
+  "comment": "Fixes to the Quran.com API line data. key is surah:ayah:position. Each one was found because its line drew far wider than a full line while the next drew short, and moving the word makes both full (see check/lines in build.ts).",
+  "line": [
+    { "key": "84:21:7", "line": 14, "why": "Page 589: the end marker of 84:21 comes back on line 13, before the ayah's last words on line 14." },
+    { "key": "2:181:5", "line": 15, "why": "Page 27: line 14 drew 1.12 of a full line and line 15 0.90; with this word on 15 both are 1.0." },
+    { "key": "8:6:10", "line": 12, "why": "Page 177: lines 11 and 12 drew 1.10 and 0.91; with this word on 12 both are 1.0." },
+    { "key": "29:33:11", "line": 6, "why": "Page 400: lines 5 and 6 drew 1.12 and 0.87; with this word on 6 both are 1.0." },
+    { "key": "36:52:10", "line": 13, "why": "Page 443: lines 12 and 13 drew 1.17 and 0.85; with this word on 13 both are 1.0." }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@mushaf/packs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mushaf packs: what a pack's manifest says, and checking one.",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@mushaf/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

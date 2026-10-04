@@ -1,0 +1,16 @@
+{
+  "name": "@mushaf/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-free Mushaf logic: data types, navigation, go-to parsing, settings.",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
