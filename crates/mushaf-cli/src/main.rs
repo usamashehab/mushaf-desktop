@@ -12,6 +12,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use mushaf_ipc::{home_dir, send, Request, Response};
 use mushaf_protocol::{normalize, Kind};
 
+/// println! that doesn't panic when the reader has gone (`mushaf status | head -1`).
+macro_rules! say {
+    ($($arg:tt)*) => {{
+        use std::io::Write;
+        let _ = writeln!(std::io::stdout(), $($arg)*);
+    }};
+}
+
 const USAGE: &str = "\
 mushaf — the Madinah Mushaf, opened while your coding agent works
 
@@ -38,15 +46,15 @@ fn main() -> ExitCode {
         ["integrations"] | ["integrations", "list"] => integrations_list(),
         ["integrations", action @ ("install" | "uninstall"), agent @ ..] => integrations(action, agent.first().copied()),
         ["--version" | "-V" | "version"] => {
-            println!("mushaf {}", env!("CARGO_PKG_VERSION"));
+            say!("mushaf {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         [] | ["help" | "--help" | "-h", ..] => {
-            println!("{USAGE}");
+            say!("{USAGE}");
             ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("{USAGE}");
+            esay!("{USAGE}");
             ExitCode::from(2)
         }
     }
@@ -147,11 +155,11 @@ fn open(place: Option<String>) -> ExitCode {
     match response {
         Ok(Response { ok: true, .. }) => ExitCode::SUCCESS,
         Ok(Response { error, .. }) => {
-            eprintln!("mushaf: {}", error.unwrap_or_else(|| "the Mushaf could not open there".into()));
+            esay!("mushaf: {}", error.unwrap_or_else(|| "the Mushaf could not open there".into()));
             ExitCode::FAILURE
         }
         Err(error) => {
-            eprintln!("mushaf: could not reach the Mushaf app ({error})");
+            esay!("mushaf: could not reach the Mushaf app ({error})");
             ExitCode::FAILURE
         }
     }
@@ -169,20 +177,20 @@ fn minutes(ms: u64) -> String {
 fn status() -> ExitCode {
     deadline(Duration::from_secs(5), 1);
     let Ok(response) = send(&Request::Status) else {
-        println!("The Mushaf app is not running.");
+        say!("The Mushaf app is not running.");
         return ExitCode::SUCCESS;
     };
-    println!("The Mushaf app {} is running.", response.version.unwrap_or_default());
+    say!("The Mushaf app {} is running.", response.version.unwrap_or_default());
     let now = now_ms();
     for heard in response.heard.unwrap_or_default() {
         let project = heard.project.map(|p| format!(" on {p}")).unwrap_or_default();
         let kind = format!("{:?}", heard.kind).to_lowercase();
         let name = mushaf_protocol::agent_name(&heard.agent);
-        println!("Last heard from {name}: {kind}{project}, {} ago.", minutes(now.saturating_sub(heard.at)));
+        say!("Last heard from {name}: {kind}{project}, {} ago.", minutes(now.saturating_sub(heard.at)));
     }
     let sessions = response.sessions.unwrap_or_default();
     if sessions.is_empty() {
-        println!("No agent is at work.");
+        say!("No agent is at work.");
     }
     for session in sessions {
         let project = session.project.map(|p| format!(" on {p}")).unwrap_or_default();
@@ -193,7 +201,7 @@ fn status() -> ExitCode {
             (false, None) => "the Mushaf won't open for it".to_owned(),
         };
         let name = mushaf_protocol::agent_name(&session.agent);
-        println!("  {name}{project}: working for {} — {when}", minutes(now.saturating_sub(session.started_at)));
+        say!("  {name}{project}: working for {} — {when}", minutes(now.saturating_sub(session.started_at)));
     }
     ExitCode::SUCCESS
 }
@@ -213,7 +221,7 @@ fn integrations_list() -> ExitCode {
             Ok(mushaf_agents::Status::Stale) => "on, but out of date: run `mushaf integrations install`".to_owned(),
             Err(error) => format!("unreadable: {error}"),
         };
-        println!("{:<12} {status}", agent.name);
+        say!("{:<12} {status}", agent.name);
     }
     ExitCode::SUCCESS
 }
@@ -225,14 +233,14 @@ fn integrations(action: &str, id: Option<&str>) -> ExitCode {
         Some(id) => match mushaf_agents::find(id) {
             Some(agent) => vec![agent],
             None => {
-                eprintln!("mushaf: no agent called {id}; try claude or codex");
+                esay!("mushaf: no agent called {id}; try claude or codex");
                 return ExitCode::from(2);
             }
         },
         None => mushaf_agents::AGENTS.iter().copied().filter(|agent| agent.detect(&home)).collect(),
     };
     if agents.is_empty() {
-        println!("No coding agent found (looked for Claude Code and Codex).");
+        say!("No coding agent found (looked for Claude Code and Codex).");
         return ExitCode::SUCCESS;
     }
     let mut failed = false;
@@ -246,16 +254,16 @@ fn integrations(action: &str, id: Option<&str>) -> ExitCode {
                     (_, true) => "hooks removed",
                     (_, false) => "had no Mushaf hooks",
                 };
-                println!("{}: {done} ({})", agent.name, agent.config_path(&home).display());
+                say!("{}: {done} ({})", agent.name, agent.config_path(&home).display());
                 if action == "install" {
                     if let Some(note) = agent.note {
-                        println!("  {note}");
+                        say!("  {note}");
                     }
                 }
             }
             Err(error) => {
                 failed = true;
-                eprintln!("{}: {error}", agent.name);
+                esay!("{}: {error}", agent.name);
             }
         }
     }
