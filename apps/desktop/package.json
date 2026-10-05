@@ -2,7 +2,7 @@
   "name": "@mushaf/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "The Mushaf desktop app. For now a web page served by Vite; the Tauri shell comes next.",
+  "description": "The Mushaf desktop app: the reader in a Tauri shell.",
   "type": "module",
   "scripts": {
     "dev": "vite",
