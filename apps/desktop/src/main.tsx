@@ -1,3 +1,6 @@
+// Amiri, a Naskh made for vowelled text, for the ayahs quoted in search results.
+import '@fontsource/amiri/arabic-400.css'
+import '@fontsource/amiri/arabic-700.css'
 import '@fontsource/ibm-plex-sans-arabic/400.css'
 import '@fontsource/ibm-plex-sans-arabic/500.css'
 import '@fontsource/ibm-plex-sans-arabic/600.css'

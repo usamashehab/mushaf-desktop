@@ -387,16 +387,19 @@
 }
 
 .search-item-text {
-  font-size: 16px;
-  line-height: 1.9;
+  font-family: 'Amiri', var(--ui);
+  font-size: 18px;
+  line-height: 2;
   color: var(--ink);
 }
 
 .search-item-text mark {
   background: rgba(199, 154, 59, 0.28);
   color: inherit;
-  border-radius: 4px;
-  padding: 0 1px;
+  font-weight: 700;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .search-empty {

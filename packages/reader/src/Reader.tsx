@@ -166,7 +166,10 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
   // A Mushaf turns leftward: ← is the next page, → the one before.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement
+      // The page slider is an input too, but its arrows are the reader's: WebKit would
+      // turn them around on a right-to-left slider.
+      const typing =
+        (event.target instanceof HTMLInputElement && event.target.type !== 'range') || event.target instanceof HTMLSelectElement
       const key = event.key.toLowerCase()
       if ((event.ctrlKey || event.metaKey) && (key === 'k' || key === 'f' || key === 'g')) {
         event.preventDefault()

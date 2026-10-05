@@ -12,13 +12,21 @@ type Item =
   | { kind: 'surah'; surah: number }
   | { kind: 'ayah'; entry: SearchEntry }
 
-/** The ayah's text around the match, with the match marked. */
-function Snippet({ text, query }: { text: string; query: string }) {
+/** Pause and recitation marks (U+06D6–U+06ED): in a one-line snippet they float loose. */
+const bare = (text: string) => text.replace(/\s*[\u06D6-\u06ED]+/g, '')
+
+/** The ayah's text around the match, with the words it falls in marked. */
+function Snippet({ text: full, query }: { text: string; query: string }) {
+  const text = bare(full)
   const match = findMatch(text, query)
   if (!match) {
     return <>{text}</>
   }
-  const [start, end] = match
+  // Whole words: a mark inside a word cuts the joined Arabic letters apart.
+  const [at, until] = match
+  const start = text.lastIndexOf(' ', at - 1) + 1
+  const space = text.indexOf(' ', until)
+  const end = space === -1 ? text.length : space
   const from = start > 70 ? text.lastIndexOf(' ', start - 50) + 1 : 0
   const to = end + 90 < text.length ? text.indexOf(' ', end + 70) : text.length
 
