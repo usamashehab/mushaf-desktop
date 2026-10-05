@@ -15,6 +15,7 @@ mushaf-protocol = { path = "crates/mushaf-protocol" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tempfile = "3"
+toml_edit = "0.25"
 
 [profile.release]
 codegen-units = 1

@@ -27,7 +27,8 @@ Usage:
   mushaf open [place]                      Show the Mushaf: a page (50), an ayah (2:255) or a surah (البقرة)
   mushaf status                            The agents at work, and when the Mushaf opens for them
   mushaf integrations [list]               Which agents have the Mushaf's hooks
-  mushaf integrations install [agent]      Add the hooks to Claude Code, Codex, or every agent found
+  mushaf integrations install [agent]      Add the hooks to one agent (claude, codex, cursor, opencode,
+                                           agy, deepseek), or to every agent found
   mushaf integrations uninstall [agent]    Take them out again (your own hooks stay)
   mushaf hook <agent> [started|finished|attention|ended]
                                            What an agent's hook runs; reads the hook's JSON on stdin
@@ -79,7 +80,27 @@ fn hook(agent: &str, kind: Option<&str>) {
     if !stdin.is_terminal() {
         let _ = stdin.lock().take(1 << 20).read_to_string(&mut payload);
     }
-    let payload = serde_json::from_str(&payload).unwrap_or(serde_json::Value::Null);
+    let mut payload = serde_json::from_str(&payload).unwrap_or(serde_json::Value::Null);
+    if agent == "agy" {
+        // Antigravity waits for a JSON answer; an empty one changes nothing.
+        say!("{{}}");
+        // No hook tells of a task stopped with Esc, but the CLI's log does.
+        let conversation = payload.get("conversationId").and_then(|id| id.as_str()).unwrap_or_default();
+        if let Some(log) = agy_log(conversation) {
+            payload["transcript_path"] = serde_json::Value::String(log.to_string_lossy().into_owned());
+        }
+    }
+    if agent == "deepseek" {
+        // DeepSeek TUI says which session and folder in its environment, not on stdin.
+        if !payload.is_object() {
+            payload = serde_json::json!({});
+        }
+        for (key, variable) in [("session_id", "DEEPSEEK_SESSION_ID"), ("workspace", "DEEPSEEK_WORKSPACE")] {
+            if let Ok(value) = std::env::var(variable) {
+                payload[key] = serde_json::Value::String(value);
+            }
+        }
+    }
     let forced = kind.and_then(Kind::parse);
     let Some(event) = normalize(agent, &payload, forced, now_ms()) else { return };
     let starts = event.kind == Kind::Started;
@@ -91,6 +112,32 @@ fn hook(agent: &str, kind: Option<&str>) {
     if launch_app(true).is_ok() {
         let _ = send_until(&request, Instant::now() + Duration::from_millis(2500));
     }
+}
+
+/// The log of the Antigravity CLI holding a conversation: of the latest few,
+/// the one that names it, or else the latest.
+fn agy_log(conversation: &str) -> Option<PathBuf> {
+    use std::io::{Seek, SeekFrom};
+    const TAIL: u64 = 512 * 1024;
+    let dir = home_dir().join(".gemini").join("antigravity-cli").join("log");
+    let mut logs: Vec<_> = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "log"))
+        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .collect();
+    logs.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+    logs.truncate(4);
+    let names = |path: &PathBuf| -> Option<bool> {
+        let mut file = std::fs::File::open(path).ok()?;
+        let length = file.metadata().ok()?.len();
+        file.seek(SeekFrom::Start(length.saturating_sub(TAIL))).ok()?;
+        let mut tail = Vec::new();
+        file.take(TAIL).read_to_end(&mut tail).ok()?;
+        Some(String::from_utf8_lossy(&tail).contains(conversation))
+    };
+    let named = (!conversation.is_empty()).then(|| logs.iter().find(|(_, path)| names(path) == Some(true))).flatten();
+    named.or(logs.first()).map(|(_, path)| path.clone())
 }
 
 /// Retries while the app starts up.
@@ -221,7 +268,7 @@ fn integrations_list() -> ExitCode {
             Ok(mushaf_agents::Status::Stale) => "on, but out of date: run `mushaf integrations install`".to_owned(),
             Err(error) => format!("unreadable: {error}"),
         };
-        say!("{:<12} {status}", agent.name);
+        say!("{:<14} {status}", agent.name);
     }
     ExitCode::SUCCESS
 }
@@ -233,14 +280,16 @@ fn integrations(action: &str, id: Option<&str>) -> ExitCode {
         Some(id) => match mushaf_agents::find(id) {
             Some(agent) => vec![agent],
             None => {
-                eprintln!("mushaf: no agent called {id}; try claude or codex");
+                let ids: Vec<_> = mushaf_agents::AGENTS.iter().map(|agent| agent.id).collect();
+                eprintln!("mushaf: no agent called {id}; try one of {}", ids.join(", "));
                 return ExitCode::from(2);
             }
         },
         None => mushaf_agents::AGENTS.iter().copied().filter(|agent| agent.detect(&home)).collect(),
     };
     if agents.is_empty() {
-        say!("No coding agent found (looked for Claude Code and Codex).");
+        let names: Vec<_> = mushaf_agents::AGENTS.iter().map(|agent| agent.name).collect();
+        say!("No coding agent found (looked for {}).", names.join(", "));
         return ExitCode::SUCCESS;
     }
     let mut failed = false;

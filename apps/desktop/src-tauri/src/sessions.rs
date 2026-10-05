@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use mushaf_ipc::{Heard, Session};
-use mushaf_protocol::{AgentEvent, Kind};
+use mushaf_protocol::{says_started_mid_task, AgentEvent, Kind};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -16,8 +16,9 @@ const FORGET_AFTER_MS: u64 = 6 * 60 * 60 * 1000;
 /// How often the transcripts are looked at for a task the user interrupted.
 const CHECK_EVERY_MS: u64 = 5_000;
 
-/// Whether an agent's transcript (by path) shows its task interrupted.
-pub type Interrupted<'a> = &'a dyn Fn(&str, &str) -> bool;
+/// Whether an agent's transcript or log (by path) shows the session's task
+/// interrupted: (agent, session, path).
+pub type Interrupted<'a> = &'a dyn Fn(&str, &str, &str) -> bool;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentPrefs {
@@ -155,6 +156,8 @@ impl Engine {
         self.heard.insert(event.agent.clone(), heard);
         let mut actions = vec![];
         match event.kind {
+            // Some agents say "started" again mid-task: the task goes on.
+            Kind::Started if says_started_mid_task(&event.agent) && self.sessions.contains_key(&key) => {}
             Kind::Started => {
                 let minutes = agent.open_after_minutes;
                 let due = (agent.enabled && minutes > 0.0).then(|| now + (minutes * 60_000.0) as u64);
@@ -210,8 +213,8 @@ impl Engine {
         if check {
             self.next_check = now + CHECK_EVERY_MS;
         }
-        self.sessions.retain(|(agent, _), tracked| {
-            let stopped = check && !tracked.opened && tracked.transcript.as_deref().is_some_and(|path| interrupted(agent, path));
+        self.sessions.retain(|(agent, session), tracked| {
+            let stopped = check && !tracked.opened && tracked.transcript.as_deref().is_some_and(|path| interrupted(agent, session, path));
             !stopped && now.saturating_sub(tracked.started_at) < FORGET_AFTER_MS
         });
         if self.sessions.len() != before {
@@ -270,7 +273,7 @@ mod tests {
         AgentEvent { v: 1, agent: "claude".into(), session: session.into(), kind, project: Some("shop".into()), transcript: None, at: 0 }
     }
 
-    const NO: Interrupted = &|_, _| false;
+    const NO: Interrupted = &|_, _, _| false;
 
     fn alert(actions: &[Action]) -> Option<&Alert> {
         actions.iter().find_map(|action| match action {
@@ -396,6 +399,26 @@ mod tests {
     }
 
     #[test]
+    fn a_start_mid_task_keeps_the_task() {
+        let prefs = Prefs::default();
+        let mut engine = Engine::default();
+        let agy = |kind| AgentEvent { agent: "agy".into(), ..event(kind, "a") };
+        engine.on_event(&agy(Kind::Started), 0, &prefs, HIDDEN);
+        // Before each model call.
+        assert!(engine.on_event(&agy(Kind::Started), MIN, &prefs, HIDDEN).is_empty());
+        assert_eq!(engine.sessions()[0].opens_at, Some(2 * MIN));
+        engine.on_event(&agy(Kind::Finished), 3 * MIN, &prefs, HIDDEN);
+        engine.on_event(&agy(Kind::Started), 4 * MIN, &prefs, HIDDEN);
+        assert_eq!(engine.sessions()[0].opens_at, Some(6 * MIN), "a new task after the last one finished");
+
+        // Claude Code's start is always a new prompt.
+        engine.on_event(&event(Kind::Started, "b"), 0, &prefs, HIDDEN);
+        engine.on_event(&event(Kind::Started, "b"), MIN, &prefs, HIDDEN);
+        let claude = engine.sessions().into_iter().find(|s| s.agent == "claude").unwrap();
+        assert_eq!(claude.opens_at, Some(3 * MIN));
+    }
+
+    #[test]
     fn a_task_the_user_interrupted_never_opens_the_mushaf() {
         let prefs = Prefs::default();
         let mut engine = Engine::default();
@@ -403,7 +426,7 @@ mod tests {
         engine.on_event(&started, 0, &prefs, HIDDEN);
         let other = AgentEvent { session: "b".into(), transcript: Some("/t/b.jsonl".into()), ..started.clone() };
         engine.on_event(&other, 0, &prefs, HIDDEN);
-        let only_a: Interrupted = &|agent, path| agent == "claude" && path == "/t/a.jsonl";
+        let only_a: Interrupted = &|agent, session, path| agent == "claude" && session == "a" && path == "/t/a.jsonl";
         assert_eq!(engine.on_tick(MIN, &prefs, HIDDEN, NO), vec![]);
         assert_eq!(engine.on_tick(MIN + 1_000, &prefs, HIDDEN, only_a), vec![], "not checked again so soon");
         assert_eq!(engine.on_tick(MIN + 5_000, &prefs, HIDDEN, only_a), vec![Action::Sessions]);

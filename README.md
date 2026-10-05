@@ -1,7 +1,8 @@
 # Mushaf — مصحف
 
 The Madinah Mushaf on your desktop, drawn exactly as the printed page, and opened by
-your coding agent (Claude Code, Codex) while it works, so the wait goes to the Quran.
+your coding agent (Claude Code, Codex, Cursor, OpenCode, Antigravity, DeepSeek TUI) while
+it works, so the wait goes to the Quran.
 When the agent finishes, or stops to ask you something, the Mushaf tells you.
 
 - [Install](#install)
@@ -49,7 +50,7 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
 
 ## Connect your coding agent
 
-The Mushaf hears from Claude Code and Codex through their hooks. Connect them once, in
+The Mushaf hears from your coding agents through their hooks. Connect them once, in
 either of two ways:
 
 - **In the app:** open Settings (the sliders button at the end of the top bar: the far left
@@ -59,7 +60,7 @@ either of two ways:
 
   ```sh
   mushaf integrations install          # every agent found on this computer
-  mushaf integrations install claude   # or one: claude, codex
+  mushaf integrations install claude   # or one: claude, codex, cursor, opencode, agy, deepseek
   mushaf integrations                  # check: each connected agent says "on"
   ```
 
@@ -67,12 +68,24 @@ either of two ways:
 `codex` in a terminal and choose **Trust all and continue** when it says
 "Hooks need review". Until then, Codex skips them without a word.
 
-Claude Code picks the hooks up by itself; no restart needed.
+**OpenCode and DeepSeek TUI read their hooks when they start:** restart any session that
+was already open. Claude Code, Cursor and Antigravity pick the hooks up by themselves.
 
-What connecting changes: it adds the Mushaf's hooks to `~/.claude/settings.json`
-(Claude Code) or `~/.codex/hooks.json` (Codex). Every hook you already have stays as it
-was. Before the first change, a copy of the file is saved beside it
-(`settings.json.mushaf.bak`, `hooks.json.mushaf.bak`), and connecting twice changes nothing.
+What connecting changes, per agent:
+
+| Agent | `install` id | File | What the Mushaf hears |
+| --- | --- | --- | --- |
+| Claude Code | `claude` | `~/.claude/settings.json` | starts, finishes, waits for you, Esc |
+| Codex | `codex` | `~/.codex/hooks.json` | starts, finishes, waits for you, Esc |
+| Cursor | `cursor` | `~/.cursor/hooks.json` | starts, finishes, stopped |
+| OpenCode | `opencode` | `~/.config/opencode/plugin/mushaf.js` (a plugin file of its own) | starts, finishes, waits for you, Esc |
+| Antigravity CLI (`agy`) | `agy` | `~/.gemini/config/hooks.json`, under the name `mushaf` | starts, finishes, Esc |
+| DeepSeek TUI (`codewhale`) | `deepseek` | `~/.codewhale/config.toml` (or `~/.deepseek/config.toml`) | starts, finishes, waits for you, Esc |
+
+Every hook you already have stays as it was. Before the first change, a copy of the file
+is saved beside it (for example `settings.json.mushaf.bak`), and connecting twice changes
+nothing. Cursor and Antigravity have no hook for a permission prompt, so the Mushaf can't
+tell you when they wait for one.
 
 ### What happens then
 
@@ -91,10 +104,11 @@ was. Before the first change, a copy of the file is saved beside it
 ### Privacy
 
 The hooks pass the app only the agent's name, its session id, what happened, the
-project folder's name, and where the session's transcript file is. Prompts and replies
-never leave the hook. No hook reports a task you stop with Esc, so the app reads the
-transcript's last lines (at most 64 KB) to notice one. Nothing leaves your computer:
-the app and the hooks talk over a local socket only you can open.
+project folder's name, and, for Claude Code, Codex and Antigravity, where the session's
+transcript or log file is. Prompts and replies never leave the hook. Those three agents
+have no hook for a task you stop with Esc, so the app reads the file's last lines (at
+most 64 KB) to notice one. Nothing leaves your computer: the app and the hooks talk over
+a local socket only you can open.
 
 ## Settings
 
@@ -144,7 +158,7 @@ Mushaf is installed in. Neither is on your `PATH`; the app's Settings do the sam
 | `mushaf open [place]` | Shows the Mushaf, starting it if needed. `place` is a page (`50`), an ayah (`2:255`) or a surah name (`البقرة`) |
 | `mushaf status` | Whether the app runs, what it last heard from each agent, and the tasks at work |
 | `mushaf integrations` | Each agent: `on`, `off`, `not installed on this machine`, or `on, but out of date` |
-| `mushaf integrations install [agent]` | Connects `claude`, `codex`, or every agent found |
+| `mushaf integrations install [agent]` | Connects `claude`, `codex`, `cursor`, `opencode`, `agy`, `deepseek`, or every agent found |
 | `mushaf integrations uninstall [agent]` | Takes out only the Mushaf's hooks |
 | `mushaf hook <agent> [started\|finished\|attention\|ended]` | What the hooks run. Reads the hook's JSON on stdin and always exits 0 |
 
@@ -166,7 +180,9 @@ Start with `mushaf status`. It prints a line per agent like
 | No "Last heard from Codex" line after a Codex task | The hooks aren't trusted yet: start `codex` and choose **Trust all and continue** |
 | No "Last heard from Claude" line after a Claude task | Run `mushaf integrations`; if Claude Code isn't `on`, run `mushaf integrations install claude` |
 | `mushaf integrations` says `on, but out of date` | Run `mushaf integrations install`. For Codex, trust the changed hooks again |
-| `mushaf integrations` says a file `is not valid JSON` | That agent's settings file has a mistake in it; fix it, then install again. The Mushaf never rewrites a file it can't read |
+| `mushaf integrations` says a file `is not valid JSON` (or `TOML`) | That agent's settings file has a mistake in it; fix it, then install again. The Mushaf never rewrites a file it can't read |
+| No "Last heard from OpenCode" (or DeepSeek) line | The agent was open before you connected it: restart it |
+| OpenCode: `mushaf.js is not the Mushaf's` | A plugin of yours has that name: rename it, then install again |
 | `The Mushaf app is not running.` | Open **Mushaf**, or run `mushaf open` |
 | No tray icon (GNOME) | Turn on the **AppIndicator** extension (Ubuntu has it on by default). Without a tray, closing the window quits the app; the next task starts it again |
 | First launch stops at "تعذّر التحميل" (the download failed) | The fonts download needs an internet connection that one time: connect, then try again |
@@ -192,9 +208,10 @@ check fails.
 
 **Rules**
 
-- Never edit `~/.claude/settings.json` or `~/.codex/hooks.json` yourself. Use
-  `mushaf integrations install` / `uninstall`: they keep the user's own hooks and back the
-  file up first.
+- Never edit an agent's hook file yourself (`~/.claude/settings.json`,
+  `~/.codex/hooks.json`, `~/.cursor/hooks.json`, `~/.gemini/config/hooks.json`,
+  `~/.codewhale/config.toml`). Use `mushaf integrations install` / `uninstall`: they keep
+  the user's own hooks and back the file up first.
 - Never write Codex's hook trust yourself. Trusting hooks is the user's decision: ask them
   to do it (step 4).
 - `sudo` needs the user's password. Ask the user to run that command, or in Claude Code
@@ -206,7 +223,7 @@ On Windows or a Mac, have the user follow [Install](#install) instead, then conn
 agents in the app's Settings; the `mushaf` command isn't on the `PATH` there.
 
 1. Check what is there already:
-   `command -v mushaf mushaf-desktop; mushaf integrations; claude --version; codex --version`.
+   `command -v mushaf mushaf-desktop; mushaf integrations`.
    If `mushaf` exists and the agents say `on`, go to step 5.
 2. Download the latest `.deb`:
 
@@ -221,12 +238,13 @@ agents in the app's Settings; the `mushaf` command isn't on the `PATH` there.
    Check: `command -v mushaf` prints `/usr/bin/mushaf`.
 4. Connect the agents: `mushaf integrations install`. Check: `mushaf integrations` shows
    `on` for each agent the user has. If Codex is connected, tell the user to start `codex`
-   once and choose **Trust all and continue**.
+   once and choose **Trust all and continue**. If OpenCode or DeepSeek TUI is connected,
+   tell the user to restart any session of it that is open.
 5. Open the app once so it downloads its fonts: `mushaf open`. Check: `mushaf status`
    prints `The Mushaf app 0.1.0 is running.`
 6. Verify the connection with a short task in each agent (for example, ask it to reply
-   "ok"), then run `mushaf status`. It must show `Last heard from Claude: ...` (or `Codex`)
-   from a few seconds ago.
+   "ok"), then run `mushaf status`. It must show `Last heard from Claude: ...` (or the
+   agent's name) from a few seconds ago.
 
 **Changing settings for the user**
 

@@ -3,25 +3,41 @@
 //! The agent's file is edited, never replaced: every hook the user already has
 //! stays as it was, a copy of the file is kept before the first change, and the
 //! file is written only when something changed. Our hooks are the commands that
-//! run a `mushaf` program with `hook` as their first argument.
+//! run a `mushaf` program with `hook` as their first argument. OpenCode takes a
+//! plugin instead: a file of our own in its plugin folder.
 
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Map, Value};
 
+/// How an agent holds its hooks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Format {
+    /// Claude Code and Codex: `hooks.<Event>` lists groups, `{matcher?, hooks: [handler]}`.
+    /// `background`: the agent may run our hook without waiting for it.
+    Grouped { events: &'static [(&'static str, Option<&'static str>)], background: bool },
+    /// Cursor: `{version: 1, hooks: {<event>: [handler]}}`.
+    Flat { events: &'static [&'static str] },
+    /// Antigravity: `{<hook name>: {<Event>: [handler]}}`, under a name of our own.
+    /// Its payload doesn't say which event it is, so each command does.
+    Named { events: &'static [(&'static str, &'static str)] },
+    /// DeepSeek TUI (Codewhale): `[[hooks.hooks]]` tables in `config.toml`, each
+    /// with its event; the command says which event it is.
+    Toml { events: &'static [(&'static str, &'static str)] },
+    /// OpenCode: a plugin file.
+    Plugin,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Agent {
     pub id: &'static str,
     pub name: &'static str,
-    /// The agent's own folder in the home folder; it is installed when this exists.
-    home_dir: &'static str,
-    /// The file holding its hooks, inside `home_dir`.
-    file: &'static str,
-    /// The hook events we listen to, with the matcher each needs.
-    events: &'static [(&'static str, Option<&'static str>)],
-    /// Whether the agent may run our hook in the background (Claude Code may).
-    background: bool,
+    /// Where the agent lives, in the home folder, and the file holding its hooks
+    /// there. The first whose folder exists is used; none existing means the
+    /// agent isn't on this machine.
+    places: &'static [(&'static str, &'static str)],
+    format: Format,
     /// What the user has to do once before the hooks run, if anything.
     pub note: Option<&'static str>,
 }
@@ -29,30 +45,72 @@ pub struct Agent {
 pub const CLAUDE: Agent = Agent {
     id: "claude",
     name: "Claude Code",
-    home_dir: ".claude",
-    file: "settings.json",
-    events: &[
-        ("UserPromptSubmit", None),
-        ("Stop", None),
-        ("StopFailure", None),
-        ("Notification", Some("permission_prompt|elicitation_dialog")),
-        ("SessionEnd", None),
-    ],
-    background: true,
+    places: &[(".claude", ".claude/settings.json")],
+    format: Format::Grouped {
+        events: &[
+            ("UserPromptSubmit", None),
+            ("Stop", None),
+            ("StopFailure", None),
+            ("Notification", Some("permission_prompt|elicitation_dialog")),
+            ("SessionEnd", None),
+        ],
+        background: true,
+    },
     note: None,
 };
 
 pub const CODEX: Agent = Agent {
     id: "codex",
     name: "Codex",
-    home_dir: ".codex",
-    file: "hooks.json",
-    events: &[("UserPromptSubmit", None), ("Stop", None), ("PermissionRequest", None), ("SessionEnd", None)],
-    background: false,
+    places: &[(".codex", ".codex/hooks.json")],
+    format: Format::Grouped {
+        events: &[("UserPromptSubmit", None), ("Stop", None), ("PermissionRequest", None), ("SessionEnd", None)],
+        background: false,
+    },
     note: Some("Codex asks once to trust new hooks: start codex and choose \"Trust all and continue\"."),
 };
 
-pub const AGENTS: &[Agent] = &[CLAUDE, CODEX];
+pub const CURSOR: Agent = Agent {
+    id: "cursor",
+    name: "Cursor",
+    places: &[(".cursor", ".cursor/hooks.json")],
+    format: Format::Flat { events: &["beforeSubmitPrompt", "stop", "sessionEnd"] },
+    note: None,
+};
+
+pub const OPENCODE: Agent = Agent {
+    id: "opencode",
+    name: "OpenCode",
+    places: &[(".config/opencode", ".config/opencode/plugin/mushaf.js")],
+    format: Format::Plugin,
+    note: Some("OpenCode loads plugins when it starts: restart any OpenCode already open."),
+};
+
+pub const ANTIGRAVITY: Agent = Agent {
+    id: "agy",
+    name: "Antigravity",
+    places: &[(".gemini/antigravity-cli", ".gemini/config/hooks.json")],
+    format: Format::Named { events: &[("PreInvocation", "started"), ("Stop", "finished")] },
+    note: None,
+};
+
+pub const DEEPSEEK: Agent = Agent {
+    id: "deepseek",
+    name: "DeepSeek TUI",
+    places: &[(".codewhale", ".codewhale/config.toml"), (".deepseek", ".deepseek/config.toml")],
+    format: Format::Toml {
+        events: &[("session_busy", "started"), ("session_idle", "finished"), ("waiting_for_user", "attention")],
+    },
+    note: Some("DeepSeek TUI reads its hooks when it starts: restart any session already open."),
+};
+
+pub const AGENTS: &[Agent] = &[CLAUDE, CODEX, CURSOR, OPENCODE, ANTIGRAVITY, DEEPSEEK];
+
+/// The name Antigravity's hooks go under.
+const HOOK_NAME: &str = "mushaf";
+/// The first line of our OpenCode plugin, by which it is known as ours.
+const PLUGIN_MARK: &str = "// The Mushaf: ";
+const PLUGIN: &str = include_str!("opencode-plugin.js");
 
 pub fn find(id: &str) -> Option<Agent> {
     AGENTS.iter().copied().find(|agent| agent.id == id)
@@ -114,41 +172,59 @@ pub fn is_ours(command: &str) -> bool {
     stem.eq_ignore_ascii_case("mushaf") && rest.trim_start().starts_with("hook ")
 }
 
+/// Our hooks in a file: (event, command) pairs.
+type Hooks = Vec<(String, String)>;
+
 impl Agent {
+    fn place(&self, home: &Path) -> Option<(&'static str, &'static str)> {
+        self.places.iter().copied().find(|(dir, _)| home.join(dir).is_dir())
+    }
+
     pub fn config_path(&self, home: &Path) -> PathBuf {
-        home.join(self.home_dir).join(self.file)
+        let (_, file) = self.place(home).unwrap_or(self.places[0]);
+        home.join(file)
     }
 
     pub fn detect(&self, home: &Path) -> bool {
-        home.join(self.home_dir).is_dir()
+        self.place(home).is_some()
     }
 
-    fn handler(&self, cli: &Path) -> Value {
-        let mut handler = json!({ "type": "command", "command": hook_command(cli, self.id), "timeout": 10 });
-        if self.background {
-            handler["async"] = Value::Bool(true);
+    /// The hooks we want: (event, command) pairs.
+    fn wanted(&self, cli: &Path) -> Hooks {
+        let command = hook_command(cli, self.id);
+        let pairs = |events: &[(&str, &str)]| events.iter().map(|(event, kind)| (event.to_string(), format!("{command} {kind}"))).collect();
+        match self.format {
+            Format::Grouped { events, .. } => events.iter().map(|(event, _)| (event.to_string(), command.clone())).collect(),
+            Format::Flat { events } => events.iter().map(|event| (event.to_string(), command.clone())).collect(),
+            Format::Named { events } | Format::Toml { events } => pairs(events),
+            Format::Plugin => vec![],
         }
-        handler
     }
 
     pub fn status(&self, home: &Path, cli: &Path) -> io::Result<Status> {
         if !self.detect(home) {
             return Ok(Status::Missing);
         }
-        let Some(root) = read(&self.config_path(home))? else {
-            return Ok(Status::Off);
-        };
-        let wanted = hook_command(cli, self.id);
-        let mut found = 0;
-        let mut current = 0;
-        for (event, _) in self.events {
-            let commands = ours_in(&root, event);
-            found += commands.len();
-            current += usize::from(commands.iter().any(|command| *command == wanted));
+        let path = self.config_path(home);
+        if self.format == Format::Plugin {
+            return Ok(match read_text(&path)? {
+                None => Status::Off,
+                Some(text) if text == plugin(cli) => Status::On,
+                Some(text) if text.starts_with(PLUGIN_MARK) => Status::Stale,
+                // Someone else's file by that name.
+                Some(_) => Status::Off,
+            });
         }
-        Ok(if found == 0 {
+        let mut found = match self.format {
+            Format::Toml { .. } => toml_ours(&read_toml(&path)?),
+            _ => read_json(&path)?.map(|root| self.json_ours(&root)).unwrap_or_default(),
+        };
+        let mut wanted = self.wanted(cli);
+        found.sort();
+        wanted.sort();
+        Ok(if found.is_empty() {
             Status::Off
-        } else if current == self.events.len() && found == current {
+        } else if found == wanted {
             Status::On
         } else {
             Status::Stale
@@ -158,90 +234,178 @@ impl Agent {
     /// Adds our hooks (replacing any earlier ones of ours). True when the file changed.
     pub fn install(&self, home: &Path, cli: &Path) -> io::Result<bool> {
         let path = self.config_path(home);
-        let before = read(&path)?;
-        let mut root = before.clone().unwrap_or_else(|| Value::Object(Map::new()));
-        remove_ours(&mut root);
-        let hooks = hooks_of(&mut root)?;
-        for (event, matcher) in self.events {
-            let groups = hooks.entry(event.to_string()).or_insert_with(|| Value::Array(vec![]));
-            let Some(groups) = groups.as_array_mut() else {
-                return Err(invalid(format!("hooks.{event} in {} is not a list", path.display())));
-            };
-            let mut group = Map::new();
-            if let Some(matcher) = matcher {
-                group.insert("matcher".into(), Value::String(matcher.to_string()));
+        match self.format {
+            Format::Plugin => {
+                let before = read_text(&path)?;
+                if before.as_deref().is_some_and(|text| !text.starts_with(PLUGIN_MARK)) {
+                    return Err(invalid(format!("{} is not the Mushaf's; move it away first", path.display())));
+                }
+                write_text(&path, before.as_deref(), &plugin(cli), false)
             }
-            group.insert("hooks".into(), Value::Array(vec![self.handler(cli)]));
-            groups.push(Value::Object(group));
+            Format::Toml { .. } => {
+                let mut doc = read_toml(&path)?;
+                let before = doc.to_string();
+                toml_remove_ours(&mut doc);
+                toml_add(&mut doc, &self.wanted(cli), &path)?;
+                write_text(&path, path.exists().then_some(before.as_str()), &doc.to_string(), true)
+            }
+            _ => {
+                let before = read_json(&path)?;
+                let mut root = before.clone().unwrap_or_else(|| Value::Object(Map::new()));
+                self.json_remove_ours(&mut root);
+                self.json_add(&mut root, cli, &path)?;
+                write_json(&path, before.as_ref(), &root, true)
+            }
         }
-        write_if_changed(&path, before.as_ref(), &root, true)
     }
 
     /// Takes out our hooks only. True when the file changed.
     pub fn uninstall(&self, home: &Path) -> io::Result<bool> {
         let path = self.config_path(home);
-        let Some(before) = read(&path)? else { return Ok(false) };
-        let mut root = before.clone();
-        remove_ours(&mut root);
-        write_if_changed(&path, Some(&before), &root, false)
+        match self.format {
+            Format::Plugin => match read_text(&path)? {
+                Some(text) if text.starts_with(PLUGIN_MARK) => std::fs::remove_file(&path).map(|()| true),
+                _ => Ok(false),
+            },
+            Format::Toml { .. } => {
+                let Some(before) = read_text(&path)? else { return Ok(false) };
+                let mut doc = read_toml(&path)?;
+                toml_remove_ours(&mut doc);
+                write_text(&path, Some(&before), &doc.to_string(), false)
+            }
+            _ => {
+                let Some(before) = read_json(&path)? else { return Ok(false) };
+                let mut root = before.clone();
+                self.json_remove_ours(&mut root);
+                write_json(&path, Some(&before), &root, false)
+            }
+        }
+    }
+
+    /// The lists of handlers (by event) in a JSON file, wherever this agent keeps them.
+    fn json_lists<'a>(&self, root: &'a Value) -> Vec<(&'a str, &'a Vec<Value>)> {
+        let lists = |object: Option<&'a Map<String, Value>>| {
+            object.into_iter().flatten().filter_map(|(event, list)| Some((event.as_str(), list.as_array()?))).collect::<Vec<_>>()
+        };
+        match self.format {
+            Format::Named { .. } => root
+                .as_object()
+                .into_iter()
+                .flatten()
+                .filter(|(_, spec)| spec.is_object())
+                .flat_map(|(_, spec)| lists(spec.as_object()))
+                .collect(),
+            _ => lists(root.get("hooks").and_then(Value::as_object)),
+        }
+    }
+
+    fn json_ours(&self, root: &Value) -> Hooks {
+        let mut found = vec![];
+        for (event, list) in self.json_lists(root) {
+            for entry in list {
+                // A handler, or a group of them.
+                let handlers = entry.get("hooks").and_then(Value::as_array).map_or(std::slice::from_ref(entry), Vec::as_slice);
+                for command in handlers.iter().filter_map(|handler| handler.get("command").and_then(Value::as_str)) {
+                    if is_ours(command) {
+                        found.push((event.to_owned(), command.to_owned()));
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    fn json_remove_ours(&self, root: &mut Value) {
+        match self.format {
+            Format::Named { .. } => {
+                let Some(object) = root.as_object_mut() else { return };
+                let mut emptied = vec![];
+                for (name, spec) in object.iter_mut() {
+                    let Some(events) = spec.as_object_mut() else { continue };
+                    let had = events.values().any(Value::is_array);
+                    remove_from_lists(events);
+                    if had && !events.values().any(Value::is_array) {
+                        emptied.push(name.clone());
+                    }
+                }
+                for name in emptied {
+                    object.shift_remove(&name);
+                }
+            }
+            _ => {
+                let Some(hooks) = root.get_mut("hooks").and_then(Value::as_object_mut) else { return };
+                remove_from_lists(hooks);
+                // Cursor's own empty file is `{"version": 1, "hooks": {}}`.
+                if hooks.is_empty() && !matches!(self.format, Format::Flat { .. }) {
+                    if let Some(object) = root.as_object_mut() {
+                        object.shift_remove("hooks");
+                    }
+                }
+            }
+        }
+    }
+
+    fn json_add(&self, root: &mut Value, cli: &Path, path: &Path) -> io::Result<()> {
+        let object = root.as_object_mut().ok_or_else(|| invalid(format!("{} is not a JSON object", path.display())))?;
+        let handler = |command: &str| json!({ "type": "command", "command": command, "timeout": 10 });
+        match self.format {
+            Format::Named { .. } => {
+                let mut spec = Map::new();
+                for (event, command) in self.wanted(cli) {
+                    spec.insert(event, json!([handler(&command)]));
+                }
+                object.insert(HOOK_NAME.into(), Value::Object(spec));
+                return Ok(());
+            }
+            Format::Flat { .. } if !object.contains_key("version") => {
+                object.shift_insert(0, "version".into(), json!(1));
+            }
+            _ => {}
+        }
+        let hooks = object
+            .entry("hooks")
+            .or_insert_with(|| Value::Object(Map::new()))
+            .as_object_mut()
+            .ok_or_else(|| invalid(format!("\"hooks\" in {} is not an object", path.display())))?;
+        for (event, command) in self.wanted(cli) {
+            let entry = match self.format {
+                Format::Grouped { events, background } => {
+                    let matcher = events.iter().find(|(name, _)| *name == event).and_then(|(_, matcher)| *matcher);
+                    let mut handler = handler(&command);
+                    if background {
+                        handler["async"] = Value::Bool(true);
+                    }
+                    let mut group = Map::new();
+                    if let Some(matcher) = matcher {
+                        group.insert("matcher".into(), Value::String(matcher.into()));
+                    }
+                    group.insert("hooks".into(), json!([handler]));
+                    Value::Object(group)
+                }
+                _ => json!({ "command": command }),
+            };
+            let list = hooks.entry(event.clone()).or_insert_with(|| json!([]));
+            let Some(list) = list.as_array_mut() else {
+                return Err(invalid(format!("hooks.{event} in {} is not a list", path.display())));
+            };
+            list.push(entry);
+        }
+        Ok(())
     }
 }
 
-fn invalid(message: String) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, message)
-}
-
-/// The file's JSON, None when there is no file. A file that isn't a JSON object
-/// is an error: it is the user's, and we won't guess at it.
-fn read(path: &Path) -> io::Result<Option<Value>> {
-    let body = match std::fs::read(path) {
-        Ok(body) => body,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    if body.iter().all(u8::is_ascii_whitespace) {
-        return Ok(None);
-    }
-    match serde_json::from_slice::<Value>(&body) {
-        Ok(value @ Value::Object(_)) => Ok(Some(value)),
-        Ok(_) => Err(invalid(format!("{} is not a JSON object", path.display()))),
-        Err(error) => Err(invalid(format!("{} is not valid JSON ({error}); fix it first", path.display()))),
-    }
-}
-
-fn hooks_of(root: &mut Value) -> io::Result<&mut Map<String, Value>> {
-    let object = root.as_object_mut().ok_or_else(|| invalid("not a JSON object".into()))?;
-    object
-        .entry("hooks")
-        .or_insert_with(|| Value::Object(Map::new()))
-        .as_object_mut()
-        .ok_or_else(|| invalid("\"hooks\" is not an object".into()))
-}
-
-fn ours_in<'a>(root: &'a Value, event: &str) -> Vec<&'a str> {
-    root.pointer(&format!("/hooks/{event}"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|group| group.get("hooks").and_then(Value::as_array))
-        .flatten()
-        .filter_map(|handler| handler.get("command").and_then(Value::as_str))
-        .filter(|command| is_ours(command))
-        .collect()
-}
-
-/// Drops our handlers, then any group or event they leave empty. Groups and
-/// events that were empty before are the user's and stay.
-fn remove_ours(root: &mut Value) {
-    let Some(hooks) = root.get_mut("hooks").and_then(Value::as_object_mut) else { return };
+/// Drops our handlers from lists of handlers or of groups, then any group or
+/// list they leave empty. Ones that were empty before are the user's and stay.
+fn remove_from_lists(lists: &mut Map<String, Value>) {
+    let ours = |handler: &Value| handler.get("command").and_then(Value::as_str).is_some_and(is_ours);
     let mut emptied = vec![];
-    for (event, groups) in hooks.iter_mut() {
-        let Some(list) = groups.as_array_mut() else { continue };
+    for (event, list) in lists.iter_mut() {
+        let Some(list) = list.as_array_mut() else { continue };
         let had = list.len();
-        list.retain_mut(|group| {
-            let Some(handlers) = group.get_mut("hooks").and_then(Value::as_array_mut) else { return true };
+        list.retain_mut(|entry| {
+            let Some(handlers) = entry.get_mut("hooks").and_then(Value::as_array_mut) else { return !ours(entry) };
             let before = handlers.len();
-            handlers.retain(|handler| !handler.get("command").and_then(Value::as_str).is_some_and(is_ours));
+            handlers.retain(|handler| !ours(handler));
             before == handlers.len() || !handlers.is_empty()
         });
         if had > 0 && list.is_empty() {
@@ -249,32 +413,119 @@ fn remove_ours(root: &mut Value) {
         }
     }
     for event in emptied {
-        hooks.shift_remove(&event);
+        lists.shift_remove(&event);
     }
-    if hooks.is_empty() {
-        if let Some(object) = root.as_object_mut() {
-            object.shift_remove("hooks");
+}
+
+fn plugin(cli: &Path) -> String {
+    let cli = serde_json::to_string(&cli.to_string_lossy()).unwrap_or_default();
+    PLUGIN.replace("__MUSHAF_CLI__", &cli)
+}
+
+fn invalid(message: String) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+fn read_text(path: &Path) -> io::Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// The file's JSON, None when there is no file. A file that isn't a JSON object
+/// is an error: it is the user's, and we won't guess at it.
+fn read_json(path: &Path) -> io::Result<Option<Value>> {
+    let Some(body) = read_text(path)? else { return Ok(None) };
+    if body.trim().is_empty() {
+        return Ok(None);
+    }
+    match serde_json::from_str::<Value>(&body) {
+        Ok(value @ Value::Object(_)) => Ok(Some(value)),
+        Ok(_) => Err(invalid(format!("{} is not a JSON object", path.display()))),
+        Err(error) => Err(invalid(format!("{} is not valid JSON ({error}); fix it first", path.display()))),
+    }
+}
+
+fn read_toml(path: &Path) -> io::Result<toml_edit::DocumentMut> {
+    let text = read_text(path)?.unwrap_or_default();
+    text.parse().map_err(|error| invalid(format!("{} is not valid TOML ({error}); fix it first", path.display())))
+}
+
+fn toml_ours(doc: &toml_edit::DocumentMut) -> Hooks {
+    let Some(list) = doc.get("hooks").and_then(|hooks| hooks.get("hooks")).and_then(toml_edit::Item::as_array_of_tables) else {
+        return vec![];
+    };
+    list.iter()
+        .filter_map(|hook| {
+            let command = hook.get("command")?.as_str()?;
+            let event = hook.get("event").and_then(toml_edit::Item::as_str).unwrap_or_default();
+            is_ours(command).then(|| (event.to_owned(), command.to_owned()))
+        })
+        .collect()
+}
+
+fn toml_remove_ours(doc: &mut toml_edit::DocumentMut) {
+    let Some(hooks) = doc.get_mut("hooks").and_then(toml_edit::Item::as_table_like_mut) else { return };
+    let Some(list) = hooks.get_mut("hooks").and_then(toml_edit::Item::as_array_of_tables_mut) else { return };
+    let had = list.len();
+    list.retain(|hook| !hook.get("command").and_then(toml_edit::Item::as_str).is_some_and(is_ours));
+    if had > 0 && list.is_empty() {
+        hooks.remove("hooks");
+        if hooks.is_empty() {
+            doc.remove("hooks");
         }
     }
 }
 
-/// Writes through a temporary file. Installing keeps a copy of the user's original first, once.
-fn write_if_changed(path: &Path, before: Option<&Value>, after: &Value, keep_original: bool) -> io::Result<bool> {
+fn toml_add(doc: &mut toml_edit::DocumentMut, wanted: &Hooks, path: &Path) -> io::Result<()> {
+    let not_a_table = || invalid(format!("\"hooks\" in {} is not a table", path.display()));
+    let hooks = doc.entry("hooks").or_insert_with(|| {
+        let mut table = toml_edit::Table::new();
+        table.set_implicit(true);
+        toml_edit::Item::Table(table)
+    });
+    let hooks = hooks.as_table_like_mut().ok_or_else(not_a_table)?;
+    let list = hooks.entry("hooks").or_insert(toml_edit::Item::ArrayOfTables(Default::default()));
+    let list = list.as_array_of_tables_mut().ok_or_else(not_a_table)?;
+    for (event, command) in wanted {
+        let mut hook = toml_edit::Table::new();
+        hook.insert("name", toml_edit::value(HOOK_NAME));
+        hook.insert("event", toml_edit::value(event.as_str()));
+        hook.insert("command", toml_edit::value(command.as_str()));
+        hook.insert("background", toml_edit::value(true));
+        hook.insert("timeout_secs", toml_edit::value(10));
+        list.push(hook);
+    }
+    Ok(())
+}
+
+fn write_json(path: &Path, before: Option<&Value>, after: &Value, keep_original: bool) -> io::Result<bool> {
     let empty = Value::Object(Map::new());
     if before.unwrap_or(&empty) == after {
+        return Ok(false);
+    }
+    let mut body = serde_json::to_string_pretty(after).map_err(|error| invalid(error.to_string()))?;
+    body.push('\n');
+    write_text(path, None, &body, keep_original && before.is_some())
+}
+
+/// Writes through a temporary file, when the text changed. Keeps a copy of the
+/// user's original first, once, when `keep_original`.
+fn write_text(path: &Path, before: Option<&str>, after: &str, keep_original: bool) -> io::Result<bool> {
+    if before == Some(after) {
         return Ok(false);
     }
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     let backup = path.with_file_name(format!("{}.mushaf.bak", path.file_name().and_then(|n| n.to_str()).unwrap_or("hooks")));
-    if keep_original && before.is_some() && !backup.exists() {
+    if keep_original && path.exists() && !backup.exists() {
         std::fs::copy(path, &backup)?;
     }
-    let mut body = serde_json::to_vec_pretty(after).map_err(|error| invalid(error.to_string()))?;
-    body.push(b'\n');
     let partial = path.with_extension("mushaf.part");
-    std::fs::write(&partial, body)?;
+    std::fs::write(&partial, after)?;
     #[cfg(unix)]
     if let Ok(meta) = std::fs::metadata(path) {
         let _ = std::fs::set_permissions(&partial, meta.permissions());
@@ -300,15 +551,21 @@ mod tests {
 
     fn home_with(agent: &Agent, body: Option<&str>) -> tempfile::TempDir {
         let home = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(home.path().join(agent.home_dir)).unwrap();
+        std::fs::create_dir_all(home.path().join(agent.places[0].0)).unwrap();
         if let Some(body) = body {
-            std::fs::write(agent.config_path(home.path()), body).unwrap();
+            let path = agent.config_path(home.path());
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
         }
         home
     }
 
     fn load(agent: &Agent, home: &Path) -> Value {
         serde_json::from_slice(&std::fs::read(agent.config_path(home)).unwrap()).unwrap()
+    }
+
+    fn text(agent: &Agent, home: &Path) -> String {
+        std::fs::read_to_string(agent.config_path(home)).unwrap()
     }
 
     #[test]
@@ -349,7 +606,7 @@ mod tests {
     fn keeps_the_users_key_order() {
         let home = home_with(&CLAUDE, Some(USER_SETTINGS));
         CLAUDE.install(home.path(), Path::new("/usr/bin/mushaf")).unwrap();
-        let text = std::fs::read_to_string(CLAUDE.config_path(home.path())).unwrap();
+        let text = text(&CLAUDE, home.path());
         let at = |key: &str| text.find(key).unwrap();
         assert!(at("\"model\"") < at("\"hooks\"") && at("\"hooks\"") < at("\"statusLine\""));
         assert!(at("\"Stop\"") < at("\"UserPromptSubmit\"") && at("\"UserPromptSubmit\"") < at("\"PreToolUse\""));
@@ -385,12 +642,106 @@ mod tests {
     }
 
     #[test]
+    fn cursor_lists_handlers_under_each_event() {
+        let users = r#"{"version":1,"hooks":{"afterFileEdit":[{"command":"./format.sh"}],"stop":[{"command":"./audit.sh"}]}}"#;
+        let home = home_with(&CURSOR, Some(users));
+        let cli = Path::new("/usr/bin/mushaf");
+        assert!(CURSOR.install(home.path(), cli).unwrap());
+        let after = load(&CURSOR, home.path());
+        assert_eq!(after["version"], 1);
+        assert_eq!(after["hooks"]["stop"], json!([{"command": "./audit.sh"}, {"command": "/usr/bin/mushaf hook cursor"}]));
+        assert_eq!(after["hooks"]["beforeSubmitPrompt"], json!([{"command": "/usr/bin/mushaf hook cursor"}]));
+        assert_eq!(CURSOR.status(home.path(), cli).unwrap(), Status::On);
+        assert!(CURSOR.uninstall(home.path()).unwrap());
+        assert_eq!(load(&CURSOR, home.path()), serde_json::from_str::<Value>(users).unwrap());
+
+        // A new file starts as Cursor's own does.
+        let home = home_with(&CURSOR, None);
+        CURSOR.install(home.path(), cli).unwrap();
+        assert!(text(&CURSOR, home.path()).trim_start().starts_with("{\n  \"version\": 1"));
+        CURSOR.uninstall(home.path()).unwrap();
+        assert_eq!(load(&CURSOR, home.path()), json!({"version": 1, "hooks": {}}));
+    }
+
+    #[test]
+    fn antigravity_gets_a_named_hook_whose_commands_say_the_event() {
+        let users = r#"{"lint":{"PostToolUse":[{"matcher":"run_command","hooks":[{"command":"./lint.sh"}]}]}}"#;
+        let home = home_with(&ANTIGRAVITY, Some(users));
+        let cli = Path::new("/usr/bin/mushaf");
+        assert_eq!(ANTIGRAVITY.config_path(home.path()), home.path().join(".gemini/config/hooks.json"));
+        assert!(ANTIGRAVITY.install(home.path(), cli).unwrap());
+        let after = load(&ANTIGRAVITY, home.path());
+        assert_eq!(after["lint"], serde_json::from_str::<Value>(users).unwrap()["lint"]);
+        assert_eq!(after["mushaf"]["PreInvocation"][0]["command"], "/usr/bin/mushaf hook agy started");
+        assert_eq!(after["mushaf"]["Stop"][0]["command"], "/usr/bin/mushaf hook agy finished");
+        assert_eq!(ANTIGRAVITY.status(home.path(), cli).unwrap(), Status::On);
+        assert_eq!(ANTIGRAVITY.status(home.path(), Path::new("/opt/mushaf")).unwrap(), Status::Stale);
+        assert!(!ANTIGRAVITY.install(home.path(), cli).unwrap());
+        assert!(ANTIGRAVITY.uninstall(home.path()).unwrap());
+        assert_eq!(load(&ANTIGRAVITY, home.path()), serde_json::from_str::<Value>(users).unwrap());
+    }
+
+    #[test]
+    fn deepseek_gets_toml_tables_and_keeps_the_rest_of_the_file() {
+        let users = "# my settings\nmodel = \"deepseek-v4-pro\"  # the big one\n\n[hooks]\nenabled = true\n\n[[hooks.hooks]]\nevent = \"session_start\"\ncommand = \"echo hi\"\n";
+        let home = home_with(&DEEPSEEK, Some(users));
+        let cli = Path::new("/usr/bin/mushaf");
+        assert!(DEEPSEEK.install(home.path(), cli).unwrap());
+        let after = text(&DEEPSEEK, home.path());
+        assert!(after.starts_with(users), "the user's lines stay as they were:\n{after}");
+        let doc: toml_edit::DocumentMut = after.parse().unwrap();
+        let hooks = doc["hooks"]["hooks"].as_array_of_tables().unwrap();
+        assert_eq!(hooks.len(), 4);
+        assert_eq!(hooks.get(1).unwrap()["event"].as_str(), Some("session_busy"));
+        assert_eq!(hooks.get(1).unwrap()["command"].as_str(), Some("/usr/bin/mushaf hook deepseek started"));
+        assert_eq!(hooks.get(1).unwrap()["background"].as_bool(), Some(true));
+        assert_eq!(DEEPSEEK.status(home.path(), cli).unwrap(), Status::On);
+        assert!(!DEEPSEEK.install(home.path(), cli).unwrap());
+        assert!(DEEPSEEK.uninstall(home.path()).unwrap());
+        assert_eq!(text(&DEEPSEEK, home.path()), users);
+        assert_eq!(std::fs::read_to_string(home.path().join(".codewhale/config.toml.mushaf.bak")).unwrap(), users);
+
+        // No file yet, and the old ~/.deepseek name.
+        let home = tempfile::tempdir().unwrap();
+        std::fs::create_dir(home.path().join(".deepseek")).unwrap();
+        assert_eq!(DEEPSEEK.config_path(home.path()), home.path().join(".deepseek/config.toml"));
+        DEEPSEEK.install(home.path(), cli).unwrap();
+        assert!(text(&DEEPSEEK, home.path()).starts_with("[[hooks.hooks]]\nname = \"mushaf\""));
+        DEEPSEEK.uninstall(home.path()).unwrap();
+        assert_eq!(text(&DEEPSEEK, home.path()).trim(), "");
+    }
+
+    #[test]
+    fn opencode_gets_a_plugin_of_ours() {
+        let home = home_with(&OPENCODE, None);
+        let cli = Path::new("C:\\Program Files\\Mushaf\\mushaf.exe");
+        assert_eq!(OPENCODE.status(home.path(), cli).unwrap(), Status::Off);
+        assert!(OPENCODE.install(home.path(), cli).unwrap());
+        let plugin = text(&OPENCODE, home.path());
+        assert!(plugin.contains(r#"const CLI = "C:\\Program Files\\Mushaf\\mushaf.exe""#));
+        assert_eq!(OPENCODE.status(home.path(), cli).unwrap(), Status::On);
+        assert_eq!(OPENCODE.status(home.path(), Path::new("/usr/bin/mushaf")).unwrap(), Status::Stale);
+        assert!(!OPENCODE.install(home.path(), cli).unwrap());
+        assert!(OPENCODE.uninstall(home.path()).unwrap());
+        assert!(!OPENCODE.config_path(home.path()).exists());
+
+        // A file of the user's by that name is left alone.
+        std::fs::write(OPENCODE.config_path(home.path()), "export const Mine = async () => ({})\n").unwrap();
+        assert!(OPENCODE.install(home.path(), cli).is_err());
+        assert!(!OPENCODE.uninstall(home.path()).unwrap());
+    }
+
+    #[test]
     fn missing_agents_and_broken_files() {
         let home = tempfile::tempdir().unwrap();
-        assert_eq!(CODEX.status(home.path(), Path::new("mushaf")).unwrap(), Status::Missing);
+        for agent in AGENTS {
+            assert_eq!(agent.status(home.path(), Path::new("mushaf")).unwrap(), Status::Missing, "{}", agent.id);
+        }
         let home = home_with(&CLAUDE, Some("{ \"hooks\": [ // a comment\n"));
         assert!(CLAUDE.install(home.path(), Path::new("mushaf")).is_err());
-        assert_eq!(std::fs::read_to_string(CLAUDE.config_path(home.path())).unwrap(), "{ \"hooks\": [ // a comment\n");
+        assert_eq!(text(&CLAUDE, home.path()), "{ \"hooks\": [ // a comment\n");
+        let home = home_with(&DEEPSEEK, Some("model = \n"));
+        assert!(DEEPSEEK.install(home.path(), Path::new("mushaf")).is_err());
     }
 
     #[test]

@@ -10,8 +10,19 @@ import type { AgentAlert, AgentSession, AgentsBridge, Integration } from './plat
 const ALERT_MS = 2 * 60 * 1000
 const MINUTE_CHOICES = [0, 1, 2, 3, 5, 10, 15, 30]
 
-export const agentName = (id: string) =>
-  id === 'claude' ? 'Claude' : id === 'codex' ? 'Codex' : id.charAt(0).toUpperCase() + id.slice(1)
+const AGENT_NAMES: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  opencode: 'OpenCode',
+  agy: 'Antigravity',
+  deepseek: 'DeepSeek',
+}
+
+export const agentName = (id: string) => AGENT_NAMES[id] ?? id.charAt(0).toUpperCase() + id.slice(1)
+
+/** Agents that read their hooks only when they start. */
+const READ_AT_START = ['opencode', 'deepseek']
 
 export interface ShownAlert extends AgentAlert {
   id: number
@@ -265,6 +276,7 @@ function AgentRow({ integration, onChange }: { integration: Integration; onChang
             </select>
           </label>
           {integration.id === 'codex' ? <p className="agent-row-note">{t.codexTrust}</p> : null}
+          {READ_AT_START.includes(integration.id) ? <p className="agent-row-note">{t.restartAgent(integration.name)}</p> : null}
         </>
       ) : null}
       {integration.error ? <p className="agent-row-note is-error">{integration.error}</p> : null}
