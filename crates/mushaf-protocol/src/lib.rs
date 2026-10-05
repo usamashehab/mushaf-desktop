@@ -158,6 +158,8 @@ mod tests {
         assert_eq!(event.project.as_deref(), Some("mushaf"));
         let stop = json!({"session_id": "019a-77", "hook_event_name": "Stop", "last_assistant_message": "done"});
         assert_eq!(normalize("codex", &stop, None, 0).unwrap().kind, Kind::Finished);
+        let end = json!({"session_id": "019a-77", "hook_event_name": "SessionEnd"});
+        assert_eq!(normalize("codex", &end, None, 0).unwrap().kind, Kind::Ended);
     }
 
     #[test]

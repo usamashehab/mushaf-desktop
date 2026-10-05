@@ -210,7 +210,7 @@ fn integrations_list() -> ExitCode {
             Ok(mushaf_agents::Status::Missing) => "not installed on this machine".to_owned(),
             Ok(mushaf_agents::Status::Off) => "off".to_owned(),
             Ok(mushaf_agents::Status::On) => format!("on ({})", agent.config_path(&home).display()),
-            Ok(mushaf_agents::Status::Stale) => "on, but pointing at another mushaf: run `mushaf integrations install`".to_owned(),
+            Ok(mushaf_agents::Status::Stale) => "on, but out of date: run `mushaf integrations install`".to_owned(),
             Err(error) => format!("unreadable: {error}"),
         };
         println!("{:<12} {status}", agent.name);

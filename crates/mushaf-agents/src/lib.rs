@@ -46,7 +46,7 @@ pub const CODEX: Agent = Agent {
     name: "Codex",
     home_dir: ".codex",
     file: "hooks.json",
-    events: &[("UserPromptSubmit", None), ("Stop", None), ("PermissionRequest", None)],
+    events: &[("UserPromptSubmit", None), ("Stop", None), ("PermissionRequest", None), ("SessionEnd", None)],
     background: false,
     note: Some("Codex asks once to trust new hooks: start codex and choose \"Trust all and continue\"."),
 };
