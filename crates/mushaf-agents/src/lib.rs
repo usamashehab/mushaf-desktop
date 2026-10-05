@@ -34,6 +34,7 @@ pub const CLAUDE: Agent = Agent {
     events: &[
         ("UserPromptSubmit", None),
         ("Stop", None),
+        ("StopFailure", None),
         ("Notification", Some("permission_prompt|elicitation_dialog")),
         ("SessionEnd", None),
     ],

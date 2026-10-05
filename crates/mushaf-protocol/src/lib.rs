@@ -85,6 +85,8 @@ fn kind_of(agent: &str, payload: &Value) -> Option<Kind> {
     match (agent, event) {
         (_, "UserPromptSubmit") => Some(Kind::Started),
         (_, "Stop") => Some(Kind::Finished),
+        // Claude Code's turn ended on an error: it waits for the user all the same.
+        ("claude", "StopFailure") => Some(Kind::Finished),
         (_, "SessionEnd" | "Interrupt") => Some(Kind::Ended),
         ("codex", "PermissionRequest") => Some(Kind::Attention),
         // Claude notifies for many things; only these mean "the agent waits for you".
@@ -163,6 +165,7 @@ mod tests {
         assert_eq!(started.project.as_deref(), Some("shop-api"));
         assert_eq!(started.at, 5);
         assert_eq!(normalize("claude", &claude("Stop"), None, 0).unwrap().kind, Kind::Finished);
+        assert_eq!(normalize("claude", &claude("StopFailure"), None, 0).unwrap().kind, Kind::Finished);
         assert_eq!(normalize("claude", &claude("SessionEnd"), None, 0).unwrap().kind, Kind::Ended);
         assert!(normalize("claude", &claude("PreToolUse"), None, 0).is_none());
         assert!(normalize("claude", &claude("SubagentStop"), None, 0).is_none());
