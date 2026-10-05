@@ -54,7 +54,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         _ => {
-            esay!("{USAGE}");
+            eprintln!("{USAGE}");
             ExitCode::from(2)
         }
     }
@@ -155,11 +155,11 @@ fn open(place: Option<String>) -> ExitCode {
     match response {
         Ok(Response { ok: true, .. }) => ExitCode::SUCCESS,
         Ok(Response { error, .. }) => {
-            esay!("mushaf: {}", error.unwrap_or_else(|| "the Mushaf could not open there".into()));
+            eprintln!("mushaf: {}", error.unwrap_or_else(|| "the Mushaf could not open there".into()));
             ExitCode::FAILURE
         }
         Err(error) => {
-            esay!("mushaf: could not reach the Mushaf app ({error})");
+            eprintln!("mushaf: could not reach the Mushaf app ({error})");
             ExitCode::FAILURE
         }
     }
@@ -233,7 +233,7 @@ fn integrations(action: &str, id: Option<&str>) -> ExitCode {
         Some(id) => match mushaf_agents::find(id) {
             Some(agent) => vec![agent],
             None => {
-                esay!("mushaf: no agent called {id}; try claude or codex");
+                eprintln!("mushaf: no agent called {id}; try claude or codex");
                 return ExitCode::from(2);
             }
         },
@@ -263,7 +263,7 @@ fn integrations(action: &str, id: Option<&str>) -> ExitCode {
             }
             Err(error) => {
                 failed = true;
-                esay!("{}: {error}", agent.name);
+                eprintln!("{}: {error}", agent.name);
             }
         }
     }
