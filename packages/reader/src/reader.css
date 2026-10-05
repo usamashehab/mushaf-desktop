@@ -6,8 +6,12 @@
   --surface: rgba(252, 250, 244, 0.86);
   --surface-solid: #fbf9f3;
   --hover: rgba(31, 107, 83, 0.07);
-  --paper: #fffdf7;
+  --paper: #fdf6e6;
   --ink: #1c1a16;
+  --quran-ink: #000;
+  --frame-stroke: #a8783a;
+  --frame-fill: #f0dfbc;
+  --frame-inner: #fbf2de;
   --muted: #7b7363;
   --line: #e1dacb;
   --accent: #1f6b53;
@@ -40,8 +44,10 @@
   --bg-glow: #e9dfc6;
   --surface: rgba(240, 231, 208, 0.88);
   --surface-solid: #efe5cc;
-  --paper: #f5ecd6;
+  --paper: #f4e8cc;
   --ink: #3a2e1c;
+  --frame-fill: #e9d4a8;
+  --frame-inner: #f7ebd0;
   --muted: #7d6b4f;
   --line: #d5c6a3;
   --accent: #7a5a24;
@@ -58,6 +64,10 @@
   --hover: rgba(255, 255, 255, 0.05);
   --paper: #171b1e;
   --ink: #e7e2d3;
+  --quran-ink: #ece6d6;
+  --frame-stroke: #c9a86a;
+  --frame-fill: #2a241a;
+  --frame-inner: #1f1c16;
   --muted: #8d8777;
   --line: #272d31;
   --accent: #5bbd98;
@@ -803,12 +813,12 @@
 .spread {
   display: flex;
   gap: 1em;
-  animation: page-in 180ms ease-out;
+  animation: page-in 120ms ease-out;
 }
 
 @keyframes page-in {
   from {
-    opacity: 0.35;
+    opacity: 0.7;
   }
 }
 
@@ -1036,6 +1046,40 @@
   justify-content: center;
 }
 
+/* The page number in a small cartouche, as the print has it. */
+.mushaf-page-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.4em;
+  height: 1.15em;
+  padding: 0 0.6em;
+  border: 0.05em solid var(--frame-stroke);
+  border-radius: 0.6em;
+  background: var(--frame-inner);
+  box-shadow: 0 0 0 0.12em var(--paper), 0 0 0 0.15em var(--frame-stroke);
+  color: var(--quran-ink);
+}
+
+.mushaf-page-badge::before,
+.mushaf-page-badge::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 0.28em;
+  height: 0.28em;
+  background: var(--frame-stroke);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.mushaf-page-badge::before {
+  right: -0.5em;
+}
+
+.mushaf-page-badge::after {
+  left: -0.5em;
+}
+
 .mushaf-chrome {
   font-size: 0.5em;
 }
@@ -1044,7 +1088,7 @@
   display: flex;
   flex-direction: column;
   direction: rtl;
-  color: var(--ink);
+  color: var(--quran-ink);
 }
 
 .mushaf-page.is-opening .mushaf-lines {
@@ -1098,25 +1142,57 @@
 .mushaf-surah-header {
   position: relative;
   justify-content: center;
-  color: var(--gold);
 }
 
 .mushaf-surah-frame {
   position: absolute;
-  inset: 0.14em 0;
+  inset: 0.08em 0;
   width: 100%;
-  height: calc(100% - 0.28em);
+  height: calc(100% - 0.16em);
 }
 
-.mushaf-surah-frame .frame-fill {
-  fill: var(--accent-soft);
+.mushaf-surah-frame .frame-outer {
+  fill: var(--frame-fill);
+  stroke: var(--frame-stroke);
+  stroke-width: 2.6;
+}
+
+.mushaf-surah-frame .frame-inner {
+  fill: var(--frame-inner);
+  stroke: var(--frame-stroke);
+  stroke-width: 1.2;
+}
+
+.mushaf-surah-frame .frame-panel {
+  fill: var(--frame-fill);
+}
+
+.mushaf-surah-frame .frame-almond {
+  fill: var(--frame-inner);
+  stroke: var(--frame-stroke);
+  stroke-width: 2.6;
+}
+
+.mushaf-surah-frame .frame-line {
+  fill: none;
+  stroke: var(--frame-stroke);
+  stroke-width: 2;
+}
+
+.mushaf-surah-frame .frame-line.thin {
+  stroke-width: 1.2;
+}
+
+.mushaf-surah-frame .frame-dot,
+.mushaf-surah-frame .frame-petal {
+  fill: var(--frame-stroke);
 }
 
 .mushaf-surah-name {
   position: relative;
   font-family: 'mushaf-surah-names';
-  font-size: 1.15em;
-  color: var(--ink);
+  font-size: 1.2em;
+  color: var(--quran-ink);
   direction: ltr;
 }
 

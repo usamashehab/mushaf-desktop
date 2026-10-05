@@ -166,7 +166,9 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
         {ready ? lines.map(line) : <span className="mushaf-loading">{loadingText}</span>}
       </div>
       <footer className="mushaf-page-foot" style={{ height: `${PAGE_BOX.foot}em` }}>
-        <span className="mushaf-chrome">{toArabicDigits(page)}</span>
+        <span className="mushaf-page-badge">
+          <span className="mushaf-chrome">{toArabicDigits(page)}</span>
+        </span>
       </footer>
       {info?.quarterStart ? <aside className="mushaf-quarter">۞ {quarterLabel(info.quarterStart)}</aside> : null}
       {ribbon ? <span className="mushaf-ribbon" data-color={ribbon.color} aria-hidden="true" /> : null}
@@ -191,13 +193,36 @@ function Basmala({ data, platform }: { data: ReaderData; platform: Platform }) {
   )
 }
 
-/** The frame a surah's name sits in: a cartouche with pointed ends. */
+/** One end of the surah frame: an almond medallion with a rosette and scrolls. */
+function FrameEnd({ x, flip }: { x: number; flip: boolean }) {
+  return (
+    <g transform={`translate(${x} 0)${flip ? ' scale(-1 1)' : ''}`}>
+      <rect className="frame-panel" x="0" y="15" width="118" height="70" />
+      <path className="frame-almond" d="M4 50Q59 8 114 50Q59 92 4 50Z" />
+      <path className="frame-line thin" d="M20 50Q59 22 98 50Q59 78 20 50Z" />
+      <circle className="frame-dot" cx="59" cy="50" r="7" />
+      <path
+        className="frame-petal"
+        d="M59 30q7 9 0 13q-7-4 0-13zM59 70q7-9 0-13q-7 4 0 13zM37 50q9-7 13 0q-4 7-13 0zM81 50q-9-7-13 0q4 7 13 0z"
+      />
+      <circle className="frame-dot" cx="12" cy="50" r="3" />
+      <circle className="frame-dot" cx="106" cy="50" r="3" />
+    </g>
+  )
+}
+
+/**
+ * The frame a surah's name sits in, after the printed Mushaf: a double rule round a
+ * warm panel, with a medallion at either end.
+ */
 function SurahFrame() {
   return (
-    <svg className="mushaf-surah-frame" viewBox="0 0 400 40" preserveAspectRatio="none" aria-hidden="true">
-      <path className="frame-fill" d="M16 3H384L398 20L384 37H16L2 20Z" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M22 7.5H378L389 20L378 32.5H22L11 20Z" fill="none" stroke="currentColor" strokeWidth="0.6" />
-      <path d="M30 20l5-5 5 5-5 5zM360 20l5-5 5 5-5 5z" fill="currentColor" />
+    <svg className="mushaf-surah-frame" viewBox="0 0 925 100" preserveAspectRatio="none" aria-hidden="true">
+      <rect className="frame-outer" x="2" y="6" width="921" height="88" rx="5" />
+      <rect className="frame-inner" x="10" y="14" width="905" height="72" rx="2" />
+      <FrameEnd x={11} flip={false} />
+      <FrameEnd x={914} flip />
+      <path className="frame-line" d="M131 14V86M137 14V86M788 14V86M794 14V86" />
     </svg>
   )
 }
