@@ -1,11 +1,20 @@
 [workspace]
 resolver = "2"
-members = ["apps/desktop/src-tauri"]
+members = ["apps/desktop/src-tauri", "crates/*"]
 
 [workspace.package]
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/usamashehab/mushaf-desktop"
+version = "0.1.0"
+
+[workspace.dependencies]
+mushaf-agents = { path = "crates/mushaf-agents" }
+mushaf-ipc = { path = "crates/mushaf-ipc" }
+mushaf-protocol = { path = "crates/mushaf-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tempfile = "3"
 
 [profile.release]
 codegen-units = 1

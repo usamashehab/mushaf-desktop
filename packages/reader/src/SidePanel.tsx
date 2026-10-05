@@ -16,9 +16,10 @@ import {
 } from '@mushaf/core'
 import { BookmarkPlus, Check, Pencil, Search, Trash2, X } from 'lucide-react'
 
+import { SettingsTab } from './Agents.tsx'
 import { useReader } from './context.tsx'
 
-export type PanelTab = 'surahs' | 'juz' | 'bookmarks'
+export type PanelTab = 'surahs' | 'juz' | 'bookmarks' | 'settings'
 
 /** The eight-pointed star the Mushaf marks numbers with. */
 export function StarNumber({ value }: { value: string }) {
@@ -263,15 +264,18 @@ interface PanelProps {
   active: AyahRef | undefined
   currentSurah: number
   currentJuz: number
+  pausedUntil: number | null
+  onPause: (until: number | null) => void
 }
 
 /** The side panel: the surahs, the juz, and the bookmarks. */
-export function SidePanel({ tab, onTab, onClose, page, active, currentSurah, currentJuz }: PanelProps) {
+export function SidePanel({ tab, onTab, onClose, page, active, currentSurah, currentJuz, pausedUntil, onPause }: PanelProps) {
   const { t, settings, n } = useReader()
   const tabs: [PanelTab, string][] = [
     ['surahs', t.surahs],
     ['juz', t.juzTab],
     ['bookmarks', `${t.bookmarks}${settings.bookmarks.length > 0 ? ` (${n(settings.bookmarks.length)})` : ''}`],
+    ['settings', t.settings],
   ]
 
   return (
@@ -291,6 +295,7 @@ export function SidePanel({ tab, onTab, onClose, page, active, currentSurah, cur
       {tab === 'surahs' ? <SurahIndex currentSurah={currentSurah} /> : null}
       {tab === 'juz' ? <JuzIndex currentJuz={currentJuz} /> : null}
       {tab === 'bookmarks' ? <BookmarkList page={page} active={active} /> : null}
+      {tab === 'settings' ? <SettingsTab pausedUntil={pausedUntil} onPause={onPause} /> : null}
     </aside>
   )
 }

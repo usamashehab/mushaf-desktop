@@ -12,7 +12,9 @@ import {
   type Settings,
   type Theme,
 } from '@mushaf/core'
-import { BookMarked, Bookmark, BookOpen, ChevronLeft, ChevronRight, Columns2, Minus, Moon, Plus, RectangleVertical, Sun, SunMoon } from 'lucide-react'
+import { BookMarked, Bookmark, BookOpen, ChevronLeft, ChevronRight, Columns2, Minus, Moon, Plus, RectangleVertical, Settings2, Sun, SunMoon } from 'lucide-react'
+
+import { AgentAlerts, AgentChip, useAgents, useOpenPlace } from './Agents.tsx'
 
 import { AyahMenu, PageSlider, Toasts, type Picked, type ToastMessage } from './Chrome.tsx'
 import { ReaderContext, digitsFor, type ReaderState } from './context.tsx'
@@ -89,6 +91,17 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
       setPicked(undefined)
     },
     [setPage],
+  )
+
+  const openPlace = useOpenPlace(open, data.meta)
+  const agents = useAgents(platform.agents, openPlace)
+  const { setPausedUntil } = agents
+  const pause = useCallback(
+    (until: number | null) => {
+      setPausedUntil(until)
+      void platform.agents?.pause(until)
+    },
+    [setPausedUntil, platform.agents],
   )
 
   const surahName = useCallback(
@@ -223,6 +236,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
                 {t.juz} {n(juzOnPage)} · {t.page} {n(settings.page)}
               </span>
             </button>
+            <AgentChip sessions={agents.sessions} pausedUntil={agents.pausedUntil} onClick={() => togglePanel('settings')} />
           </div>
           <SearchBox focusKey={searchFocus} />
           <div className="top-bar-end">
@@ -255,9 +269,13 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
                 <Plus size={17} />
               </button>
             </span>
+            <button type="button" className={`icon-button${panel === 'settings' ? ' is-on' : ''}`} onClick={() => togglePanel('settings')} title={t.settings}>
+              <Settings2 size={19} />
+            </button>
           </div>
         </header>
         {banner}
+        <AgentAlerts alerts={agents.alerts} onDismiss={agents.dismiss} />
         <div className="body">
           {panel ? (
             <SidePanel
@@ -268,6 +286,8 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
               active={active}
               currentSurah={surahOnPage}
               currentJuz={juzOnPage}
+              pausedUntil={agents.pausedUntil}
+              onPause={pause}
             />
           ) : null}
           <main className="view" ref={viewRef}>

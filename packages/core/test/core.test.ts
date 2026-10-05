@@ -154,4 +154,10 @@ describe('settings', () => {
     const settings = migrateSettings({ agentDefaults: { openAfterMinutes: 5 } })
     expect(agentSettings(settings, 'gemini')).toEqual({ enabled: true, openAfterMinutes: 5 })
   })
+
+  test('alerts default to a banner only, with the Mushaf brought to the front', () => {
+    expect(DEFAULT_SETTINGS.alerts).toEqual({ focusOnOpen: true, notify: false, notifyWhenClosed: false, sound: false })
+    const settings = migrateSettings({ alerts: { notify: true, sound: 'loud', pausedUntil: 5 } })
+    expect(settings.alerts).toEqual({ focusOnOpen: true, notify: true, notifyWhenClosed: false, sound: false })
+  })
 })

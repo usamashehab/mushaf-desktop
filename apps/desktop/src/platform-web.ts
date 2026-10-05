@@ -1,6 +1,7 @@
 import type { Settings } from '@mushaf/core'
 import type { Platform } from '@mushaf/reader'
 
+import { demoAgents } from './agents-demo.ts'
 import { extraFontPath, pageFontPath } from './fonts.ts'
 
 const KEY = 'mushaf.settings'
@@ -23,4 +24,5 @@ export const webPlatform: Platform = {
       // Private windows may refuse storage; the reader keeps working without it.
     }
   },
+  ...(new URLSearchParams(location.search).get('agents') === 'demo' ? { agents: demoAgents() } : {}),
 }

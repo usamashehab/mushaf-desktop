@@ -13,13 +13,17 @@ fn settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
 }
 
 /// The settings as last saved, or null when there are none (or they don't parse).
-#[tauri::command]
-pub fn load_settings<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value, String> {
-    let path = settings_path(&app)?;
-    Ok(std::fs::read(path)
+pub fn read<R: Runtime>(app: &AppHandle<R>) -> serde_json::Value {
+    settings_path(app)
         .ok()
+        .and_then(|path| std::fs::read(path).ok())
         .and_then(|body| serde_json::from_slice(&body).ok())
-        .unwrap_or(serde_json::Value::Null))
+        .unwrap_or(serde_json::Value::Null)
+}
+
+#[tauri::command]
+pub fn load_settings<R: Runtime>(app: AppHandle<R>) -> serde_json::Value {
+    read(&app)
 }
 
 /// Writes to a temporary file first, so a crash mid-save keeps the old settings.
@@ -32,5 +36,9 @@ pub fn save_settings<R: Runtime>(app: AppHandle<R>, settings: serde_json::Value)
     let partial = path.with_extension("json.part");
     let body = serde_json::to_vec_pretty(&settings).map_err(|error| error.to_string())?;
     std::fs::write(&partial, body).map_err(|error| error.to_string())?;
-    std::fs::rename(&partial, &path).map_err(|error| error.to_string())
+    std::fs::rename(&partial, &path).map_err(|error| error.to_string())?;
+    // The agent rules and the tray read them too.
+    app.state::<crate::agents::Agents>().settings_changed(&settings);
+    crate::tray::refresh(&app);
+    Ok(())
 }

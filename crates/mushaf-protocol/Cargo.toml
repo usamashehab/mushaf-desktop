@@ -1,0 +1,10 @@
+[package]
+name = "mushaf-protocol"
+description = "What agents tell the Mushaf, and how each agent's hook payload becomes it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

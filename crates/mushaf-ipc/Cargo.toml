@@ -1,0 +1,15 @@
+[package]
+name = "mushaf-ipc"
+description = "The local socket the hook CLI and the Mushaf app talk over."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+interprocess = "2"
+mushaf-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

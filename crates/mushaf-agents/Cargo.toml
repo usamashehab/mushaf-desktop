@@ -1,0 +1,12 @@
+[package]
+name = "mushaf-agents"
+description = "Adds the Mushaf's hooks to each coding agent's settings, and takes them out again."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

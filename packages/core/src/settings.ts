@@ -41,8 +41,11 @@ export interface Settings {
   alerts: {
     /** Bring the window to the front when it opens for an agent, or open it behind. */
     focusOnOpen: boolean
-    /** Notify when an agent finishes even though the Mushaf never opened for it. */
+    /** A system notification as well as the banner, when the Mushaf isn't in front. */
+    notify: boolean
+    /** Notify when an agent finishes even though the Mushaf is closed. */
     notifyWhenClosed: boolean
+    /** A soft chime with each alert. */
     sound: boolean
   }
 }
@@ -58,7 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pack: 'qcf-v2',
   agents: {},
   agentDefaults: { enabled: true, openAfterMinutes: 2 },
-  alerts: { focusOnOpen: false, notifyWhenClosed: false, sound: true },
+  alerts: { focusOnOpen: true, notify: false, notifyWhenClosed: false, sound: false },
 }
 
 export const agentSettings = (settings: Settings, agent: string): AgentSettings =>
@@ -140,6 +143,7 @@ export function migrateSettings(stored: unknown): Settings {
     agentDefaults: defaults,
     alerts: {
       focusOnOpen: boolean(alerts['focusOnOpen'], d.alerts.focusOnOpen),
+      notify: boolean(alerts['notify'], d.alerts.notify),
       notifyWhenClosed: boolean(alerts['notifyWhenClosed'], d.alerts.notifyWhenClosed),
       sound: boolean(alerts['sound'], d.alerts.sound),
     },

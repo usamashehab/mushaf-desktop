@@ -6,7 +6,7 @@ import type { PackManifest } from '@mushaf/packs'
 
 import { fitFontSize, prefersSpread } from '../src/geometry.ts'
 import { surahNameGlyphs } from '../src/MushafPage.tsx'
-import { Reader, type Platform, type ReaderData } from '../src/index.ts'
+import { Reader, type AgentAlert, type AgentSession, type AgentsBridge, type Integration, type Platform, type ReaderData } from '../src/index.ts'
 
 import layout from '../../../data/packs/qcf-v2/layout.json' with { type: 'json' }
 import manifest from '../../../data/packs/qcf-v2/manifest.json' with { type: 'json' }
@@ -148,5 +148,85 @@ describe('the reader', () => {
     expect(rows()).toEqual(['البقرة · ٢٥٥', 'حفظ'])
     fireEvent.click(screen.getByRole('button', { name: /حفظ/ }))
     expect(shownPages()).toEqual([7])
+  })
+})
+
+describe('agents', () => {
+  /** A bridge the test drives by hand. */
+  function bridge(sessions: AgentSession[] = []) {
+    const listeners: { alert?: (alert: AgentAlert) => void; sessions?: (sessions: AgentSession[]) => void; open?: (place: string) => void } = {}
+    let integrations: Integration[] = [
+      { id: 'claude', name: 'Claude Code', status: 'off', note: null, configPath: '', error: null },
+      { id: 'codex', name: 'Codex', status: 'missing', note: null, configPath: '', error: null },
+    ]
+    const calls: string[] = []
+    const agents: AgentsBridge = {
+      state: async () => ({ sessions, pausedUntil: null }),
+      onSessions: listener => ((listeners.sessions = listener), () => {}),
+      onAlert: listener => ((listeners.alert = listener), () => {}),
+      onPause: () => () => {},
+      onOpenPlace: listener => ((listeners.open = listener), () => {}),
+      takeOpenPlace: async () => null,
+      pause: async until => void calls.push(`pause ${until === null ? 'off' : 'on'}`),
+      integrations: async () => integrations,
+      setIntegration: async (id, on) => {
+        calls.push(`${on ? 'install' : 'uninstall'} ${id}`)
+        integrations = integrations.map(one => (one.id === id ? { ...one, status: on ? 'on' : 'off' } : one))
+
+        return integrations.find(one => one.id === id) as Integration
+      },
+    }
+
+    return { agents, listeners, calls }
+  }
+
+  test('a working agent shows in the top bar, and its finish as a banner', async () => {
+    const { agents, listeners } = bridge([{ agent: 'claude', session: 's', project: 'shop', started_at: Date.now() - 3 * 60_000, opened: true }])
+    render(<Reader data={data} platform={{ ...platform(), agents }} settings={{ page: 50 }} />)
+    expect(await screen.findByText(/Claude يعمل — ٣ د/)).toBeTruthy()
+    act(() => {
+      listeners.sessions?.([])
+      listeners.alert?.({ agent: 'claude', project: 'shop', kind: 'finished', at: 1, workedMs: 4 * 60_000, sound: false })
+    })
+    expect(screen.queryByText(/Claude يعمل/)).toBeNull()
+    expect(screen.getByText('أنهى Claude عمله')).toBeTruthy()
+    expect(screen.getByText('shop — بعد ٤ د')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'إخفاء' }))
+    expect(screen.queryByText('أنهى Claude عمله')).toBeNull()
+  })
+
+  test('mushaf open goes to the place it was given', async () => {
+    const { agents, listeners } = bridge()
+    render(<Reader data={data} platform={{ ...platform(), agents }} settings={{ page: 50, spread: 'single' }} />)
+    await waitFor(() => expect(listeners.open).toBeDefined())
+    act(() => listeners.open?.('2:255'))
+    expect(document.querySelector('.mushaf-page')?.getAttribute('data-page')).toBe('42')
+  })
+
+  test('the settings tab connects an agent and sets its minutes', async () => {
+    const { agents, calls } = bridge()
+    const shown = platform()
+    render(<Reader data={data} platform={{ ...shown, agents }} settings={{ page: 50, language: 'en' }} />)
+    fireEvent.click(screen.getByTitle('Settings'))
+    const connect = await screen.findByRole('switch', { name: 'Connect Claude Code' })
+    expect(screen.getByRole('switch', { name: 'Connect Codex' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(connect)
+    await screen.findByText('Connected')
+    fireEvent.change(screen.getByRole('combobox', { name: /Open the Mushaf after/ }), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('switch', { name: 'A soft chime with each alert' }))
+    fireEvent.click(screen.getByText('Pause until tomorrow'))
+    expect(calls).toEqual(['install claude', 'pause on'])
+    await waitFor(() => {
+      const last = shown.saved.at(-1)
+      expect(last?.agents['claude']?.openAfterMinutes).toBe(5)
+      expect(last?.alerts.sound).toBe(true)
+    })
+  })
+
+  test('without a bridge there is no agents section', () => {
+    render(<Reader data={data} platform={platform()} settings={{ page: 50, language: 'en' }} />)
+    fireEvent.click(screen.getByTitle('Settings'))
+    expect(screen.queryByText('Coding agents')).toBeNull()
+    expect(screen.getByText('Language')).toBeTruthy()
   })
 })

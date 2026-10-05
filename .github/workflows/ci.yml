@@ -18,6 +18,16 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+  # The Rust side: the hook payloads, the session rules, the hook installer, the socket.
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
   # Every page in Chromium and WebKit: no line may overflow its page. The screenshot
   # comparisons run locally only, since the page chrome's system font differs on CI.
   pages:

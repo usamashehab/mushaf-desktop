@@ -8,7 +8,8 @@
     "beforeDevCommand": "pnpm exec vite",
     "devUrl": "http://127.0.0.1:5173",
     "beforeBuildCommand": "pnpm exec vite build",
-    "frontendDist": "../dist"
+    "frontendDist": "../dist",
+    "beforeBundleCommand": "cargo build --release -p mushaf-cli"
   },
   "app": {
     "windows": [
@@ -20,7 +21,8 @@
         "minWidth": 420,
         "minHeight": 560,
         "center": true,
-        "backgroundColor": "#f2eee4"
+        "backgroundColor": "#f2eee4",
+        "visible": false
       }
     ],
     "security": {
@@ -42,6 +44,28 @@
       "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/bin/mushaf": "../../../target/release/mushaf"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/bin/mushaf": "../../../target/release/mushaf"
+        }
+      },
+      "appimage": {
+        "files": {
+          "/usr/bin/mushaf": "../../../target/release/mushaf"
+        }
+      }
+    },
+    "macOS": {
+      "files": {
+        "MacOS/mushaf": "../../../target/release/mushaf"
+      }
+    }
   }
 }

@@ -1244,3 +1244,348 @@
 .reader .bookmark-edit input:focus-visible {
   outline: none;
 }
+
+/* ───────────── Agents: the banner, the chip, the settings ───────────── */
+
+.agent-alerts {
+  position: absolute;
+  z-index: 45;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(460px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.agent-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+  animation: alert-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.agent-alert.is-attention {
+  border-inline-start-color: var(--gold);
+}
+
+.agent-alert-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.agent-alert.is-attention .agent-alert-icon {
+  background: var(--word-hover);
+  color: var(--gold);
+}
+
+.agent-alert-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+}
+
+.agent-alert-text strong {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.agent-alert-text span {
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes alert-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+}
+
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 28px;
+  margin-inline-start: 4px;
+  padding: 0 11px;
+  border: 1px solid var(--accent-soft);
+  border-radius: 14px;
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reader .agent-chip {
+  color: var(--accent);
+}
+
+.reader .agent-chip.is-paused {
+  background: var(--hover);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.agent-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-chip-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  animation: agent-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (max-width: 860px) {
+  .agent-chip-label {
+    display: none;
+  }
+  .agent-chip {
+    padding: 0 9px;
+  }
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px 14px 24px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.settings-hint {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.switch span {
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: inset-inline-start 150ms;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--accent);
+}
+
+.switch[aria-checked='true'] span {
+  inset-inline-start: 19px;
+}
+
+.switch:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--hover);
+}
+
+.segmented button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.reader .segmented button {
+  color: var(--muted);
+}
+
+.reader .segmented button[aria-pressed='true'] {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.agent-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.agent-row.is-on {
+  border-color: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+[dir='rtl'] .agent-row.is-on {
+  box-shadow: inset -3px 0 0 var(--accent);
+}
+
+.agent-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-row-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+}
+
+.agent-row-name strong {
+  font-size: 14px;
+}
+
+.agent-row-state {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-row.is-on .agent-row-state {
+  color: var(--accent);
+}
+
+.agent-row.is-stale .agent-row-state,
+.agent-row.is-error .agent-row-state {
+  color: var(--mark-rose);
+}
+
+.agent-row-fix {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reader .agent-row-fix {
+  color: var(--accent);
+}
+
+.agent-row-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.agent-row-field select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.agent-row-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--word-hover);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.agent-row-note.is-error {
+  background: transparent;
+  color: var(--mark-rose);
+  padding: 0;
+}
+
+.settings-pause {
+  margin-top: 6px;
+}
