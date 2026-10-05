@@ -15,7 +15,7 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
 - [For AI assistants](#for-ai-assistants)
 - [Development](#development)
 
-> **Status: early development (0.1.0).** Tested by hand on Linux (Ubuntu, GNOME, X11).
+> **Status: early development (0.2.0).** Tested by hand on Linux (Ubuntu, GNOME, X11).
 > The Windows and macOS installers are built from the same code but not yet tested by hand.
 > For a Mushaf inside the Claude Code terminal, see
 > [claude-quran](https://github.com/usamashehab/claude-quran).
@@ -27,16 +27,16 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
 
    | Computer | File |
    | --- | --- |
-   | Linux: Ubuntu, Debian, Mint | `Mushaf_0.1.0_amd64.deb` |
-   | Linux: Fedora, openSUSE | `Mushaf-0.1.0-1.x86_64.rpm` |
-   | Windows 10 or 11 | `Mushaf_0.1.0_x64-setup.exe` |
-   | Mac with Apple silicon (M1 or later) | `Mushaf_0.1.0_aarch64.dmg` |
+   | Linux: Ubuntu, Debian, Mint | `Mushaf_0.2.0_amd64.deb` |
+   | Linux: Fedora, openSUSE | `Mushaf-0.2.0-1.x86_64.rpm` |
+   | Windows 10 or 11 | `Mushaf_0.2.0_x64-setup.exe` |
+   | Mac with Apple silicon (M1 or later) | `Mushaf_0.2.0_aarch64.dmg` |
 
 2. Install it:
 
    - **Ubuntu, Debian:** double-click the file, or in a terminal, in the folder you saved it to:
-     `sudo apt install ./Mushaf_0.1.0_amd64.deb`
-   - **Fedora:** `sudo dnf install ./Mushaf-0.1.0-1.x86_64.rpm`
+     `sudo apt install ./Mushaf_0.2.0_amd64.deb`
+   - **Fedora:** `sudo dnf install ./Mushaf-0.2.0-1.x86_64.rpm`
    - **Windows:** run the file. The installer isn't signed, so Windows may show
      "Windows protected your PC": choose **More info**, then **Run anyway**.
    - **Mac:** open the `.dmg` and drag **Mushaf** to Applications. The app isn't notarized
@@ -47,6 +47,10 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
    after that it works offline.
 
 4. Connect your coding agent: see the next section.
+
+**Updating:** install the new file over the old one, the same way. Your settings,
+bookmarks and connected agents stay. To connect an agent the new version adds, turn it on
+in Settings or run `mushaf integrations install`.
 
 ## Connect your coding agent
 
@@ -85,13 +89,15 @@ What connecting changes, per agent:
 Every hook you already have stays as it was. Before the first change, a copy of the file
 is saved beside it (for example `settings.json.mushaf.bak`), and connecting twice changes
 nothing. Cursor and Antigravity have no hook for a permission prompt, so the Mushaf can't
-tell you when they wait for one.
+tell you when they wait for one. Cursor's connection follows Cursor's own hook format but
+hasn't yet been tried with a signed-in Cursor; the others were tried with real tasks.
 
 ### What happens then
 
 - **While the agent works:** when one task (one prompt) has run for 2 minutes, the Mushaf
-  opens in front of you, once per task. A shorter task opens nothing. A chip in the top bar
-  shows who is working and for how long.
+  opens, once per task: in front of you, unless you chose behind or a notification in
+  Settings. A shorter task opens nothing. A chip in the top bar shows who is working and for
+  how long.
 - **It waits until you're waiting.** The Mushaf doesn't come up while you type or use the
   mouse, for example in another agent: it opens once you've left the keyboard and mouse
   for 30 seconds. When an agent asks you something (a permission, a question), it also
@@ -137,7 +143,10 @@ Settings are saved in `~/.config/app.mushaf.desktop/settings.json` on Linux.
 
 ## Using the Mushaf
 
-Click an ayah for its menu (bookmark, copy). Type in the search box to search the
+The pages sit in an open book: going to the next or the previous page turns the leaf
+over, as a Mushaf turns; jumping further shows the new place at once, and with reduced
+motion set on your computer the pages change without turning. Click an ayah for its menu
+(bookmark, copy). Type in the search box to search the
 Quran's text, or to go somewhere: `50` (a page), `2:255` (an ayah), `البقرة` or
 `Al-Baqarah` (a surah).
 
@@ -191,6 +200,7 @@ Start with `mushaf status`. It prints a line per agent like
 | `mushaf integrations` says a file `is not valid JSON` (or `TOML`) | That agent's settings file has a mistake in it; fix it, then install again. The Mushaf never rewrites a file it can't read |
 | No "Last heard from OpenCode" (or DeepSeek) line | The agent was open before you connected it: restart it |
 | OpenCode: `mushaf.js is not the Mushaf's` | A plugin of yours has that name: rename it, then install again |
+| The agent has worked past its minutes, but the Mushaf hasn't opened | It waits until you've left the keyboard and mouse for 30 seconds, until you answer an agent's question, and for 10 minutes after you put it away (see [What happens then](#what-happens-then)). `mushaf status` then says `ready: the Mushaf opens once you are not busy`. To open on time while you type, turn off **Only when I'm away from the keyboard** |
 | `The Mushaf app is not running.` | Open **Mushaf**, or run `mushaf open` |
 | No tray icon (GNOME) | Turn on the **AppIndicator** extension (Ubuntu has it on by default). Without a tray, closing the window quits the app; the next task starts it again |
 | First launch stops at "تعذّر التحميل" (the download failed) | The fonts download needs an internet connection that one time: connect, then try again |
@@ -249,7 +259,7 @@ agents in the app's Settings; the `mushaf` command isn't on the `PATH` there.
    once and choose **Trust all and continue**. If OpenCode or DeepSeek TUI is connected,
    tell the user to restart any session of it that is open.
 5. Open the app once so it downloads its fonts: `mushaf open`. Check: `mushaf status`
-   prints `The Mushaf app 0.1.0 is running.`
+   prints `The Mushaf app 0.2.0 is running.`
 6. Verify the connection with a short task in each agent (for example, ask it to reply
    "ok"), then run `mushaf status`. It must show `Last heard from Claude: ...` (or the
    agent's name) from a few seconds ago.
@@ -295,7 +305,7 @@ cd mushaf-desktop
 corepack enable    # turns on pnpm, the package manager this repo uses
 pnpm install
 pnpm --dir apps/desktop exec tauri build --bundles deb
-sudo apt install ./target/release/bundle/deb/Mushaf_0.1.0_amd64.deb
+sudo apt install ./target/release/bundle/deb/Mushaf_0.2.0_amd64.deb
 ```
 
 On Windows and macOS, follow Tauri's [prerequisites](https://v2.tauri.app/start/prerequisites/)

@@ -244,7 +244,7 @@ fn status() -> ExitCode {
         let when = match (session.opened, session.opens_at) {
             (true, _) => "the Mushaf opened for it".to_owned(),
             (false, Some(at)) if at > now => format!("the Mushaf opens in {}", minutes(at - now)),
-            (false, Some(_)) => "the Mushaf opens now".to_owned(),
+            (false, Some(_)) => "ready: the Mushaf opens once you are not busy".to_owned(),
             (false, None) => "the Mushaf won't open for it".to_owned(),
         };
         let name = mushaf_protocol::agent_name(&session.agent);

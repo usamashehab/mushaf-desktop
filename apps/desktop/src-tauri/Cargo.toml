@@ -1,6 +1,6 @@
 [package]
 name = "mushaf-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "The Madinah Mushaf on your desktop, opened by your coding agents while they work."
 edition.workspace = true
 license.workspace = true
