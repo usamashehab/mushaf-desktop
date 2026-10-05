@@ -39,8 +39,10 @@ export interface Settings {
   agents: Record<string, AgentSettings>
   agentDefaults: AgentSettings
   alerts: {
-    /** Bring the window to the front when it opens for an agent, or open it behind. */
-    focusOnOpen: boolean
+    /** How the Mushaf opens for an agent at work: in front, behind the window in use, or only a notification. */
+    openStyle: OpenStyle
+    /** Open only once the user has left the keyboard and mouse for a while, not while they work in another agent. */
+    onlyWhenIdle: boolean
     /** A system notification as well as the banner, when the Mushaf isn't in front. */
     notify: boolean
     /** Notify when an agent finishes even though the Mushaf is closed. */
@@ -49,6 +51,8 @@ export interface Settings {
     sound: boolean
   }
 }
+
+export type OpenStyle = 'front' | 'behind' | 'notify'
 
 export const DEFAULT_SETTINGS: Settings = {
   v: 1,
@@ -61,7 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pack: 'qcf-v2',
   agents: {},
   agentDefaults: { enabled: true, openAfterMinutes: 2 },
-  alerts: { focusOnOpen: true, notify: false, notifyWhenClosed: false, sound: false },
+  alerts: { openStyle: 'front', onlyWhenIdle: true, notify: false, notifyWhenClosed: false, sound: false },
 }
 
 export const agentSettings = (settings: Settings, agent: string): AgentSettings =>
@@ -142,7 +146,9 @@ export function migrateSettings(stored: unknown): Settings {
     agents,
     agentDefaults: defaults,
     alerts: {
-      focusOnOpen: boolean(alerts['focusOnOpen'], d.alerts.focusOnOpen),
+      // Before there was a choice, "bring to the front" was on or off.
+      openStyle: pick(alerts['openStyle'], ['front', 'behind', 'notify'] as const, alerts['focusOnOpen'] === false ? 'behind' : d.alerts.openStyle),
+      onlyWhenIdle: boolean(alerts['onlyWhenIdle'], d.alerts.onlyWhenIdle),
       notify: boolean(alerts['notify'], d.alerts.notify),
       notifyWhenClosed: boolean(alerts['notifyWhenClosed'], d.alerts.notifyWhenClosed),
       sound: boolean(alerts['sound'], d.alerts.sound),

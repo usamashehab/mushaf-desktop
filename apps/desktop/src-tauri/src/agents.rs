@@ -10,7 +10,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::sessions::{Action, Alert, AlertKind, Engine, Prefs, WindowState};
+use crate::sessions::{Action, AlertKind, Engine, Notice, Prefs, WindowState};
 
 pub struct Agents {
     engine: Mutex<Engine>,
@@ -79,14 +79,58 @@ pub fn show_window<R: Runtime>(app: &AppHandle<R>, focus: bool) {
     }
 }
 
-fn notification_text(alert: &Alert, language: &str) -> (String, String) {
-    let agent = mushaf_protocol::agent_name(&alert.agent);
-    let project = alert.project.clone().unwrap_or_default();
-    match (language, alert.kind) {
-        ("ar", AlertKind::Finished) => (format!("أنهى {agent} عمله"), project),
-        ("ar", AlertKind::Attention) => (format!("{agent} ينتظرك"), project),
-        (_, AlertKind::Finished) => (format!("{agent} finished"), project),
-        (_, AlertKind::Attention) => (format!("{agent} is waiting for you"), project),
+/// "Claude", "Claude and Codex", "Claude, Codex and Cursor"; in Arabic with و.
+fn names(agents: &[&str], language: &str) -> String {
+    let mut names: Vec<String> = agents.iter().map(|agent| mushaf_protocol::agent_name(agent)).collect();
+    names.dedup();
+    match (language, names.as_slice()) {
+        (_, []) => String::new(),
+        (_, [one]) => one.clone(),
+        ("ar", [first, rest @ ..]) => rest.iter().fold(first.clone(), |text, name| format!("{text} و{name}")),
+        (_, [rest @ .., last]) => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+fn finished_text(names: &str, language: &str) -> String {
+    if language == "ar" { format!("انتهى عمل {names}") } else { format!("{names} finished") }
+}
+
+fn waiting_text(names: &str, language: &str, many: bool) -> String {
+    match (language, many) {
+        ("ar", _) => format!("ينتظرك {names}"),
+        (_, true) => format!("{names} are waiting for you"),
+        (_, false) => format!("{names} is waiting for you"),
+    }
+}
+
+/// One notification for alerts that came together: who waits for the user
+/// first, then who finished, then the projects.
+fn notice_text(notice: &Notice, language: &str) -> (String, String) {
+    match notice {
+        Notice::Working(agents) => {
+            let agents: Vec<&str> = agents.iter().map(String::as_str).collect();
+            let who = names(&agents, language);
+            if language == "ar" {
+                ("المصحف جاهز".into(), format!("يعمل {who} منذ مدة. افتح المصحف من شريط النظام."))
+            } else {
+                let have = if agents.len() > 1 { "have" } else { "has" };
+                ("The Mushaf is ready".into(), format!("{who} {have} been at work a while. Open the Mushaf from the tray."))
+            }
+        }
+        Notice::Alerts(alerts) => {
+            let of = |kind: AlertKind| alerts.iter().filter(|alert| alert.kind == kind).map(|alert| alert.agent.as_str()).collect::<Vec<_>>();
+            let (waiting, finished) = (of(AlertKind::Attention), of(AlertKind::Finished));
+            let waiting_line = (!waiting.is_empty()).then(|| waiting_text(&names(&waiting, language), language, waiting.len() > 1));
+            let finished_line = (!finished.is_empty()).then(|| finished_text(&names(&finished, language), language));
+            let mut projects: Vec<&str> = alerts.iter().filter_map(|alert| alert.project.as_deref()).collect();
+            projects.dedup();
+            let projects = projects.join(if language == "ar" { "، " } else { ", " });
+            match (waiting_line, finished_line) {
+                (Some(title), Some(also)) => (title, format!("{also} — {projects}").trim_end_matches(" — ").to_owned()),
+                (Some(title), None) | (None, Some(title)) => (title, projects),
+                (None, None) => (String::new(), projects),
+            }
+        }
     }
 }
 
@@ -96,17 +140,15 @@ fn run<R: Runtime>(app: &AppHandle<R>, actions: Vec<Action>) {
         match action {
             Action::Open { focus } => show_window(app, focus),
             Action::Alert(alert) => {
-                if alert.banner {
-                    let _ = app.emit_to("main", "agent-alert", &alert);
+                let _ = app.emit_to("main", "agent-alert", &alert);
+            }
+            Action::Notify { notice, sound } => {
+                let (title, body) = notice_text(&notice, &agents.language.lock().unwrap());
+                let mut builder = app.notification().builder().title(title).body(body);
+                if sound {
+                    builder = builder.sound("default");
                 }
-                if alert.notify {
-                    let (title, body) = notification_text(&alert, &agents.language.lock().unwrap());
-                    let mut builder = app.notification().builder().title(title).body(body);
-                    if alert.sound && !alert.banner {
-                        builder = builder.sound("default");
-                    }
-                    let _ = builder.show();
-                }
+                let _ = builder.show();
             }
             Action::Sessions => {
                 let sessions = agents.engine.lock().unwrap().sessions();
@@ -176,7 +218,8 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
         let agents = tick_app.state::<Agents>();
         let prefs = agents.prefs.lock().unwrap().clone();
         let window = window_state(&tick_app);
-        let actions = agents.engine.lock().unwrap().on_tick(now_ms(), &prefs, window, &transcript_interrupted);
+        let idle = crate::idle::idle_ms();
+        let actions = agents.engine.lock().unwrap().on_tick(now_ms(), &prefs, window, idle, &transcript_interrupted);
         run(&tick_app, actions);
     });
 }
@@ -270,4 +313,31 @@ pub fn integrations_set(id: String, on: bool) -> Result<Integration, String> {
         agent.uninstall(&home).map_err(|e| e.to_string())?;
     }
     Ok(integration(&agent, cli_path().as_ref()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sessions::Alert;
+
+    fn alert(agent: &str, kind: AlertKind, project: &str) -> Alert {
+        Alert { agent: agent.into(), project: Some(project.into()), kind, at: 0, worked_ms: None, banner: false, notify: true, sound: false }
+    }
+
+    #[test]
+    fn one_notification_names_every_agent() {
+        let finished = Notice::Alerts(vec![alert("claude", AlertKind::Finished, "api"), alert("codex", AlertKind::Finished, "web")]);
+        assert_eq!(notice_text(&finished, "en"), ("Claude and Codex finished".into(), "api, web".into()));
+        assert_eq!(notice_text(&finished, "ar"), ("انتهى عمل Claude وCodex".into(), "api، web".into()));
+        let mixed = Notice::Alerts(vec![
+            alert("claude", AlertKind::Finished, "api"),
+            alert("codex", AlertKind::Attention, "api"),
+            alert("agy", AlertKind::Finished, "site"),
+        ]);
+        assert_eq!(notice_text(&mixed, "en"), ("Codex is waiting for you".into(), "Claude and Antigravity finished — api, site".into()));
+        let one = Notice::Alerts(vec![alert("cursor", AlertKind::Attention, "api")]);
+        assert_eq!(notice_text(&one, "ar").0, "ينتظرك Cursor");
+        let working = Notice::Working(vec!["claude".into(), "codex".into(), "opencode".into()]);
+        assert_eq!(notice_text(&working, "en").1, "Claude, Codex and OpenCode have been at work a while. Open the Mushaf from the tray.");
+    }
 }

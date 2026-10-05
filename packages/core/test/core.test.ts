@@ -155,9 +155,12 @@ describe('settings', () => {
     expect(agentSettings(settings, 'gemini')).toEqual({ enabled: true, openAfterMinutes: 5 })
   })
 
-  test('alerts default to a banner only, with the Mushaf brought to the front', () => {
-    expect(DEFAULT_SETTINGS.alerts).toEqual({ focusOnOpen: true, notify: false, notifyWhenClosed: false, sound: false })
-    const settings = migrateSettings({ alerts: { notify: true, sound: 'loud', pausedUntil: 5 } })
-    expect(settings.alerts).toEqual({ focusOnOpen: true, notify: true, notifyWhenClosed: false, sound: false })
+  test('alerts default to a banner only, with the Mushaf brought to the front once the user is idle', () => {
+    expect(DEFAULT_SETTINGS.alerts).toEqual({ openStyle: 'front', onlyWhenIdle: true, notify: false, notifyWhenClosed: false, sound: false })
+    const settings = migrateSettings({ alerts: { notify: true, sound: 'loud', pausedUntil: 5, openStyle: 'sideways' } })
+    expect(settings.alerts).toEqual({ openStyle: 'front', onlyWhenIdle: true, notify: true, notifyWhenClosed: false, sound: false })
+    // "Bring to the front" off, from before there was a choice.
+    expect(migrateSettings({ alerts: { focusOnOpen: false } }).alerts.openStyle).toBe('behind')
+    expect(migrateSettings({ alerts: { openStyle: 'notify', onlyWhenIdle: false } }).alerts).toMatchObject({ openStyle: 'notify', onlyWhenIdle: false })
   })
 })

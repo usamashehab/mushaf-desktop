@@ -1650,6 +1650,19 @@
   line-height: 1.5;
 }
 
+/* A label over a choice too wide to sit beside it. */
+.setting-toggle.is-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.setting-toggle.is-stacked .segmented button {
+  flex: 1;
+  padding: 0 6px;
+}
+
 .switch {
   position: relative;
   flex: none;

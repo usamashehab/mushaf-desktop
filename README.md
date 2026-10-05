@@ -92,6 +92,13 @@ tell you when they wait for one.
 - **While the agent works:** when one task (one prompt) has run for 2 minutes, the Mushaf
   opens in front of you, once per task. A shorter task opens nothing. A chip in the top bar
   shows who is working and for how long.
+- **It waits until you're waiting.** The Mushaf doesn't come up while you type or use the
+  mouse, for example in another agent: it opens once you've left the keyboard and mouse
+  for 30 seconds. When an agent asks you something (a permission, a question), it also
+  waits until you next touch the keyboard or mouse, to answer it. After you put away a
+  Mushaf that opened by itself, it stays away for 10 minutes. With several agents at work,
+  that makes one opening, not one each. The idle time comes from GNOME or KDE on Linux and
+  from the system on Windows and macOS; on other Linux desktops the Mushaf opens on time.
 - **When the agent finishes:** a banner inside the Mushaf: "Claude finished", with the
   project's name and how long it worked. It goes away after 2 minutes, or with its ✕.
 - **When the agent stops to ask you something** (a permission, a question): a banner says
@@ -119,9 +126,10 @@ Open Settings with the sliders button at the end of the top bar, or by clicking 
 | Language | العربية | The interface language: Arabic or English |
 | *Agent* switch | off | Connects or disconnects that agent's hooks (see above) |
 | Open the Mushaf after | 2 minutes | Per agent: how long one task runs before the Mushaf opens. Never, 1, 2, 3, 5, 10, 15 or 30 minutes |
-| Bring the Mushaf to the front when it opens | on | Off: it opens behind your other windows |
+| When it is time for the Mushaf | Open in front | **Open behind** shows it behind the window you use; **Notify only** leaves it in the tray and sends a notification |
+| Only when I'm away from the keyboard | on | Off: it opens on time even while you type |
 | A soft chime with each alert | off | |
-| A system notification too | off | A desktop notification along with the banner, when the Mushaf isn't the window in front |
+| A system notification too | off | A desktop notification along with the banner, when the Mushaf isn't the window in front. Alerts a few seconds apart share one notification and one chime |
 | Alert me even when the Mushaf is closed | off | A desktop notification when an agent finishes while the Mushaf is in the tray |
 | Pause until tomorrow | — | No opening and no alerts until midnight. Also in the tray menu. **Resume** undoes it |
 
@@ -257,12 +265,13 @@ must change the file, quit the app first (tray menu → Quit, or
 {
   "agentDefaults": { "enabled": true, "openAfterMinutes": 2 },
   "agents": { "codex": { "enabled": true, "openAfterMinutes": 5 } },
-  "alerts": { "focusOnOpen": true, "notify": false, "notifyWhenClosed": false, "sound": false },
+  "alerts": { "openStyle": "front", "onlyWhenIdle": true, "notify": false, "notifyWhenClosed": false, "sound": false },
   "language": "ar"
 }
 ```
 
 `openAfterMinutes` is 0 for never. An agent missing from `agents` uses `agentDefaults`.
+`openStyle` is `front`, `behind` or `notify`.
 Change only the keys you need; leave the others as they are.
 
 ## How the page stays exact

@@ -1,5 +1,6 @@
 mod agents;
 mod fonts;
+mod idle;
 mod sessions;
 mod settings;
 mod tray;

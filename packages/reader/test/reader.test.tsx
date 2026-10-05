@@ -215,12 +215,15 @@ describe('agents', () => {
     await screen.findByText('Connected')
     fireEvent.change(screen.getByRole('combobox', { name: /Open the Mushaf after/ }), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('switch', { name: 'A soft chime with each alert' }))
+    expect(screen.getByRole('button', { name: 'Open in front' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Notify only' }))
+    fireEvent.click(screen.getByRole('switch', { name: "Only when I'm away from the keyboard" }))
     fireEvent.click(screen.getByText('Pause until tomorrow'))
     expect(calls).toEqual(['install claude', 'pause on'])
     await waitFor(() => {
       const last = shown.saved.at(-1)
       expect(last?.agents['claude']?.openAfterMinutes).toBe(5)
-      expect(last?.alerts.sound).toBe(true)
+      expect(last?.alerts).toMatchObject({ sound: true, openStyle: 'notify', onlyWhenIdle: false })
     })
   })
 

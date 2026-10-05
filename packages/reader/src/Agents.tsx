@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { agentSettings, parseGoTo, type Settings } from '@mushaf/core'
+import { agentSettings, parseGoTo, type OpenStyle, type Settings } from '@mushaf/core'
 import { BellRing, CheckCircle2, CirclePause, Hand, Play, X } from 'lucide-react'
 
 import { useReader } from './context.tsx'
@@ -309,7 +309,14 @@ export function SettingsTab({ pausedUntil, onPause }: { pausedUntil: number | nu
     }
   }, [bridge])
 
-  const setAlert = (key: keyof Settings['alerts']) => (on: boolean) => update(current => ({ ...current, alerts: { ...current.alerts, [key]: on } }))
+  type Flag = Exclude<keyof Settings['alerts'], 'openStyle'>
+  const setAlert = (key: Flag) => (on: boolean) => update(current => ({ ...current, alerts: { ...current.alerts, [key]: on } }))
+  const setOpenStyle = (openStyle: OpenStyle) => update(current => ({ ...current, alerts: { ...current.alerts, openStyle } }))
+  const openStyles: [OpenStyle, string][] = [
+    ['front', t.openFront],
+    ['behind', t.openBehind],
+    ['notify', t.openNotify],
+  ]
   const tomorrow = () => {
     const at = new Date()
     at.setHours(24, 0, 0, 0)
@@ -349,7 +356,18 @@ export function SettingsTab({ pausedUntil, onPause }: { pausedUntil: number | nu
             <h3>
               <BellRing size={15} aria-hidden="true" /> {t.alertsTitle}
             </h3>
-            <Toggle label={t.focusOnOpen} on={settings.alerts.focusOnOpen} onChange={setAlert('focusOnOpen')} />
+            <div className="setting-toggle is-stacked">
+              <span>{t.openStyle}</span>
+              <div className="segmented">
+                {openStyles.map(([style, label]) => (
+                  <button key={style} type="button" aria-pressed={settings.alerts.openStyle === style} onClick={() => setOpenStyle(style)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Toggle label={t.onlyWhenIdle} on={settings.alerts.onlyWhenIdle} onChange={setAlert('onlyWhenIdle')} />
+            <p className="settings-hint">{t.onlyWhenIdleHint}</p>
             <Toggle label={t.sound} on={settings.alerts.sound} onChange={setAlert('sound')} />
             <Toggle label={t.notify} on={settings.alerts.notify} onChange={setAlert('notify')} />
             <Toggle label={t.notifyWhenClosed} on={settings.alerts.notifyWhenClosed} onChange={setAlert('notifyWhenClosed')} />
