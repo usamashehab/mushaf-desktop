@@ -1,0 +1,52 @@
+name: Release
+
+# A version tag (v0.1.0) builds the installers on Linux, Windows and macOS and puts
+# them on a draft release, to check and publish by hand.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04, so the .deb runs on older glibc too. No AppImage: hooks would point
+          # into its temporary mount, gone after it closes.
+          - os: ubuntu-22.04
+            args: --bundles deb,rpm
+          - os: windows-latest
+            args: --bundles nsis
+          - os: macos-latest
+            args: --bundles app,dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Before the app: the Windows installer packs target/release/mushaf.exe as it builds.
+      - run: cargo build --release -p mushaf-cli
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm exec tauri
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_name }}
+          releaseName: Mushaf ${{ github.ref_name }}
+          releaseBody: See the README for how to install and connect your coding agent.
+          releaseDraft: true

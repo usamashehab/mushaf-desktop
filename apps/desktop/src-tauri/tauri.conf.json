@@ -65,7 +65,8 @@
     "macOS": {
       "files": {
         "MacOS/mushaf": "../../../target/release/mushaf"
-      }
+      },
+      "signingIdentity": "-"
     }
   }
 }
