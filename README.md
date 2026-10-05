@@ -34,8 +34,10 @@ Then:
 
 Installing edits `~/.claude/settings.json` or `~/.codex/hooks.json` in place: every hook
 you already have stays, a copy of the file is kept first (`*.mushaf.bak`), and running it
-twice changes nothing. The hooks pass on only the agent, its session id, what happened and
-the project folder's name; prompts and messages never leave them.
+twice changes nothing. The hooks pass on only the agent, its session id, what happened, the
+project folder's name and where the session's transcript is; prompts and messages never leave
+them. No hook reports a task you stop with Esc, so the app reads the transcript's last lines
+(never more) to notice one, and then doesn't open for it.
 
 Other commands: `mushaf open 2:255` (a page, an ayah or a surah name), `mushaf status`
 (the agents at work, and what the app last heard from each). Any other agent can call

@@ -13,6 +13,11 @@ use serde_json::Value;
 
 /// A task this long without a word from its agent is forgotten.
 const FORGET_AFTER_MS: u64 = 6 * 60 * 60 * 1000;
+/// How often the transcripts are looked at for a task the user interrupted.
+const CHECK_EVERY_MS: u64 = 5_000;
+
+/// Whether an agent's transcript (by path) shows its task interrupted.
+pub type Interrupted<'a> = &'a dyn Fn(&str, &str) -> bool;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentPrefs {
@@ -118,6 +123,7 @@ pub enum Action {
 #[derive(Debug, Clone, PartialEq)]
 struct Tracked {
     project: Option<String>,
+    transcript: Option<String>,
     started_at: u64,
     due: Option<u64>,
     opened: bool,
@@ -128,6 +134,7 @@ pub struct Engine {
     sessions: BTreeMap<(String, String), Tracked>,
     /// The last event from each agent.
     heard: BTreeMap<String, Heard>,
+    next_check: u64,
     /// No opening and no alerts before this (ms since the epoch).
     pub paused_until: Option<u64>,
 }
@@ -151,7 +158,10 @@ impl Engine {
             Kind::Started => {
                 let minutes = agent.open_after_minutes;
                 let due = (agent.enabled && minutes > 0.0).then(|| now + (minutes * 60_000.0) as u64);
-                self.sessions.insert(key, Tracked { project: event.project.clone(), started_at: now, due, opened: false });
+                self.sessions.insert(
+                    key,
+                    Tracked { project: event.project.clone(), transcript: event.transcript.clone(), started_at: now, due, opened: false },
+                );
                 actions.push(Action::Sessions);
             }
             Kind::Finished | Kind::Attention => {
@@ -190,11 +200,20 @@ impl Engine {
         actions
     }
 
-    /// Run about once a second.
-    pub fn on_tick(&mut self, now: u64, prefs: &Prefs, window: WindowState) -> Vec<Action> {
+    /// Run about once a second. A task the user interrupted ends without a hook,
+    /// so its transcript is looked at every few seconds: then it is forgotten
+    /// before the Mushaf opens for it.
+    pub fn on_tick(&mut self, now: u64, prefs: &Prefs, window: WindowState, interrupted: Interrupted) -> Vec<Action> {
         let mut actions = vec![];
         let before = self.sessions.len();
-        self.sessions.retain(|_, tracked| now.saturating_sub(tracked.started_at) < FORGET_AFTER_MS);
+        let check = now >= self.next_check;
+        if check {
+            self.next_check = now + CHECK_EVERY_MS;
+        }
+        self.sessions.retain(|(agent, _), tracked| {
+            let stopped = check && !tracked.opened && tracked.transcript.as_deref().is_some_and(|path| interrupted(agent, path));
+            !stopped && now.saturating_sub(tracked.started_at) < FORGET_AFTER_MS
+        });
         if self.sessions.len() != before {
             actions.push(Action::Sessions);
         }
@@ -248,8 +267,10 @@ mod tests {
     const FRONT: WindowState = WindowState { visible: true, focused: true };
 
     fn event(kind: Kind, session: &str) -> AgentEvent {
-        AgentEvent { v: 1, agent: "claude".into(), session: session.into(), kind, project: Some("shop".into()), at: 0 }
+        AgentEvent { v: 1, agent: "claude".into(), session: session.into(), kind, project: Some("shop".into()), transcript: None, at: 0 }
     }
+
+    const NO: Interrupted = &|_, _| false;
 
     fn alert(actions: &[Action]) -> Option<&Alert> {
         actions.iter().find_map(|action| match action {
@@ -264,10 +285,10 @@ mod tests {
         let mut engine = Engine::default();
         engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
         assert_eq!(engine.sessions()[0].opens_at, Some(2 * MIN));
-        assert!(!engine.on_tick(2 * MIN - 1, &prefs, HIDDEN).contains(&Action::Open { focus: true }));
-        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN)[0], Action::Open { focus: true });
+        assert!(!engine.on_tick(2 * MIN - 1, &prefs, HIDDEN, NO).contains(&Action::Open { focus: true }));
+        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN, NO)[0], Action::Open { focus: true });
         // Once per task, even if the user hides it again.
-        assert!(!engine.on_tick(3 * MIN, &prefs, HIDDEN).iter().any(|a| matches!(a, Action::Open { .. })));
+        assert!(!engine.on_tick(3 * MIN, &prefs, HIDDEN, NO).iter().any(|a| matches!(a, Action::Open { .. })));
         assert!(engine.sessions()[0].opened);
     }
 
@@ -279,7 +300,7 @@ mod tests {
         let done = engine.on_event(&event(Kind::Finished, "a"), MIN, &prefs, HIDDEN);
         assert_eq!(done, vec![Action::Sessions]);
         assert_eq!((engine.heard()[0].kind, engine.heard()[0].at), (Kind::Finished, MIN));
-        assert!(engine.on_tick(5 * MIN, &prefs, HIDDEN).is_empty());
+        assert!(engine.on_tick(5 * MIN, &prefs, HIDDEN, NO).is_empty());
     }
 
     #[test]
@@ -287,7 +308,7 @@ mod tests {
         let prefs = Prefs::default();
         let mut engine = Engine::default();
         engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
-        engine.on_tick(2 * MIN, &prefs, HIDDEN);
+        engine.on_tick(2 * MIN, &prefs, HIDDEN, NO);
         let done = engine.on_event(&event(Kind::Finished, "a"), 5 * MIN, &prefs, FRONT);
         let alert = alert(&done).unwrap();
         assert_eq!((alert.kind, alert.banner, alert.notify, alert.sound), (AlertKind::Finished, true, false, false));
@@ -320,7 +341,7 @@ mod tests {
         let waiting = engine.on_event(&event(Kind::Attention, "a"), MIN, &prefs, BEHIND);
         assert_eq!(alert(&waiting).unwrap().kind, AlertKind::Attention);
         assert_eq!(engine.sessions().len(), 1);
-        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN)[0], Action::Open { focus: true });
+        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN, NO)[0], Action::Open { focus: true });
     }
 
     #[test]
@@ -329,7 +350,7 @@ mod tests {
         let mut engine = Engine::default();
         engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
         assert_eq!(engine.on_event(&event(Kind::Ended, "a"), MIN, &prefs, FRONT), vec![Action::Sessions]);
-        assert!(engine.on_tick(3 * MIN, &prefs, HIDDEN).is_empty());
+        assert!(engine.on_tick(3 * MIN, &prefs, HIDDEN, NO).is_empty());
     }
 
     #[test]
@@ -337,10 +358,10 @@ mod tests {
         let prefs = Prefs::default();
         let mut engine = Engine { paused_until: Some(10 * MIN), ..Engine::default() };
         engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
-        assert!(!engine.on_tick(3 * MIN, &prefs, HIDDEN).iter().any(|a| matches!(a, Action::Open { .. })));
+        assert!(!engine.on_tick(3 * MIN, &prefs, HIDDEN, NO).iter().any(|a| matches!(a, Action::Open { .. })));
         assert!(alert(&engine.on_event(&event(Kind::Attention, "a"), 4 * MIN, &prefs, FRONT)).is_none());
         // After the pause, a task still running gets its Mushaf.
-        assert_eq!(engine.on_tick(10 * MIN, &prefs, HIDDEN)[0], Action::Open { focus: true });
+        assert_eq!(engine.on_tick(10 * MIN, &prefs, HIDDEN, NO)[0], Action::Open { focus: true });
     }
 
     #[test]
@@ -354,9 +375,9 @@ mod tests {
         let codex = AgentEvent { agent: "codex".into(), ..event(Kind::Started, "a") };
         engine.on_event(&codex, MIN, &prefs, HIDDEN);
         assert_eq!(engine.sessions().len(), 2);
-        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN)[0], Action::Open { focus: false });
+        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN, NO)[0], Action::Open { focus: false });
         // Already in front: no second open, but codex's task is marked as opened.
-        assert!(!engine.on_tick(6 * MIN, &prefs, FRONT).iter().any(|a| matches!(a, Action::Open { .. })));
+        assert!(!engine.on_tick(6 * MIN, &prefs, FRONT, NO).iter().any(|a| matches!(a, Action::Open { .. })));
         assert!(engine.sessions().iter().all(|s| s.opened));
     }
 
@@ -369,9 +390,25 @@ mod tests {
         let mut engine = Engine::default();
         engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
         assert_eq!(engine.sessions()[0].opens_at, None);
-        assert!(engine.on_tick(60 * MIN, &prefs, HIDDEN).is_empty());
+        assert!(engine.on_tick(60 * MIN, &prefs, HIDDEN, NO).is_empty());
         let codex = AgentEvent { agent: "codex".into(), ..event(Kind::Finished, "b") };
         assert!(alert(&engine.on_event(&codex, 0, &prefs, FRONT)).is_none());
+    }
+
+    #[test]
+    fn a_task_the_user_interrupted_never_opens_the_mushaf() {
+        let prefs = Prefs::default();
+        let mut engine = Engine::default();
+        let started = AgentEvent { transcript: Some("/t/a.jsonl".into()), ..event(Kind::Started, "a") };
+        engine.on_event(&started, 0, &prefs, HIDDEN);
+        let other = AgentEvent { session: "b".into(), transcript: Some("/t/b.jsonl".into()), ..started.clone() };
+        engine.on_event(&other, 0, &prefs, HIDDEN);
+        let only_a: Interrupted = &|agent, path| agent == "claude" && path == "/t/a.jsonl";
+        assert_eq!(engine.on_tick(MIN, &prefs, HIDDEN, NO), vec![]);
+        assert_eq!(engine.on_tick(MIN + 1_000, &prefs, HIDDEN, only_a), vec![], "not checked again so soon");
+        assert_eq!(engine.on_tick(MIN + 5_000, &prefs, HIDDEN, only_a), vec![Action::Sessions]);
+        assert_eq!(engine.sessions().iter().map(|s| s.session.as_str()).collect::<Vec<_>>(), ["b"]);
+        assert_eq!(engine.on_tick(2 * MIN, &prefs, HIDDEN, only_a)[0], Action::Open { focus: true }, "b still opens");
     }
 
     #[test]
@@ -379,7 +416,7 @@ mod tests {
         let prefs = Prefs::default();
         let mut engine = Engine::default();
         engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
-        engine.on_tick(7 * 60 * MIN, &prefs, FRONT);
+        engine.on_tick(7 * 60 * MIN, &prefs, FRONT, NO);
         assert!(engine.sessions().is_empty());
     }
 

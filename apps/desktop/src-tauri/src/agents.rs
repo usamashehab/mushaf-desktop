@@ -144,6 +144,22 @@ fn handle<R: Runtime>(app: &AppHandle<R>, request: Request) -> Response {
     }
 }
 
+/// Reads the end of a transcript (never more) to see whether its task was interrupted.
+fn transcript_interrupted(agent: &str, path: &str) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    const TAIL: u64 = 64 * 1024;
+    let Ok(mut file) = std::fs::File::open(path) else { return false };
+    let length = file.metadata().map(|m| m.len()).unwrap_or(0);
+    if file.seek(SeekFrom::Start(length.saturating_sub(TAIL))).is_err() {
+        return false;
+    }
+    let mut tail = Vec::new();
+    if file.take(TAIL).read_to_end(&mut tail).is_err() {
+        return false;
+    }
+    mushaf_protocol::was_interrupted(agent, &String::from_utf8_lossy(&tail))
+}
+
 /// Starts the socket server and the once-a-second clock. A second app can't
 /// get here (single instance), so taking over a leftover socket is safe.
 pub fn start<R: Runtime>(app: &AppHandle<R>) {
@@ -160,7 +176,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
         let agents = tick_app.state::<Agents>();
         let prefs = agents.prefs.lock().unwrap().clone();
         let window = window_state(&tick_app);
-        let actions = agents.engine.lock().unwrap().on_tick(now_ms(), &prefs, window);
+        let actions = agents.engine.lock().unwrap().on_tick(now_ms(), &prefs, window, &transcript_interrupted);
         run(&tick_app, actions);
     });
 }

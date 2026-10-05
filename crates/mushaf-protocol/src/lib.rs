@@ -1,6 +1,7 @@
 //! What an agent's hook tells the Mushaf, and how each agent's own hook payload
-//! becomes it. Only the agent, the session, what happened and the project's
-//! folder name are kept: prompts, messages and transcripts never leave the hook.
+//! becomes it. Only the agent, the session, what happened, the project's folder
+//! name and where the transcript is are kept: prompts, messages and the
+//! transcript's content never leave the hook.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -43,6 +44,10 @@ pub struct AgentEvent {
     /// The folder name of the project the agent works in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// The path of the session's transcript, to see a task interrupted by the
+    /// user (which no hook reports). Only its last lines are ever read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<String>,
     /// ms since the epoch, when the hook ran.
     pub at: u64,
 }
@@ -107,8 +112,33 @@ pub fn normalize(agent: &str, payload: &Value, forced: Option<Kind>, now_ms: u64
         session: session.chars().take(128).collect(),
         kind,
         project: text(payload, "cwd").and_then(folder_name),
+        transcript: text(payload, "transcript_path").map(str::to_owned),
         at: now_ms,
     })
+}
+
+/// Whether the transcript's last lines show the user stopped the task (Esc or
+/// Ctrl+C), which ends it without a Stop hook. `tail` is the end of the file.
+pub fn was_interrupted(agent: &str, tail: &str) -> bool {
+    for line in tail.lines().rev() {
+        let Ok(record) = serde_json::from_str::<Value>(line) else { continue };
+        match agent {
+            // The last message decides: Claude Code records the interruption as one.
+            "claude" => {
+                if matches!(record.get("type").and_then(Value::as_str), Some("user" | "assistant")) {
+                    return line.contains("[Request interrupted by user");
+                }
+            }
+            // The last turn event decides.
+            "codex" => match record.pointer("/payload/type").and_then(Value::as_str) {
+                Some("turn_aborted") => return true,
+                Some("task_started" | "task_complete") => return false,
+                _ => {}
+            },
+            _ => return false,
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -167,8 +197,30 @@ mod tests {
         let event = normalize("claude", &claude("UserPromptSubmit"), None, 1).unwrap();
         let wire = serde_json::to_string(&event).unwrap();
         assert!(!wire.contains("secret"));
-        assert!(!wire.contains("transcript"));
+        assert_eq!(event.transcript.as_deref(), Some("/home/u/.claude/projects/x.jsonl"));
         assert_eq!(serde_json::from_str::<AgentEvent>(&wire).unwrap(), event);
+    }
+
+    #[test]
+    fn sees_a_task_the_user_interrupted() {
+        let claude = [
+            r#"{"type":"user","message":{"role":"user","content":"read the file"}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}]}}"#,
+        ];
+        let interrupted = r#"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}"#;
+        let attachment = r#"{"type":"attachment","attachment":{"type":"deferred_tools_record"}}"#;
+        assert!(!was_interrupted("claude", &claude.join("\n")));
+        assert!(was_interrupted("claude", &[claude[0], claude[1], interrupted, attachment].join("\n")));
+        // A half-written last line, cut by the tail, is skipped.
+        assert!(was_interrupted("claude", &[interrupted, "{\"type\":\"assist"].join("\n")));
+
+        let started = r#"{"type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}"#;
+        let aborted = r#"{"type":"event_msg","payload":{"type":"turn_aborted","reason":"interrupted"}}"#;
+        let item = r#"{"type":"response_item","payload":{"type":"message"}}"#;
+        assert!(!was_interrupted("codex", &[started, item].join("\n")));
+        assert!(was_interrupted("codex", &[started, item, aborted, item].join("\n")));
+        assert!(!was_interrupted("codex", &[aborted, started].join("\n")));
+        assert!(!was_interrupted("aider", aborted));
     }
 
     #[test]
