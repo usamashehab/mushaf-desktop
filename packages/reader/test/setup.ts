@@ -27,3 +27,15 @@ class FakeResizeObserver {
 
 Object.assign(globalThis, { FontFace: FakeFontFace, ResizeObserver: FakeResizeObserver })
 Object.defineProperty(document, 'fonts', { value: { add() {}, delete() {}, check: () => true } })
+
+// The book turns its pages only when motion is welcome; the tests read the page reached.
+window.matchMedia = ((query: string) => ({
+  matches: query.includes('prefers-reduced-motion: reduce'),
+  media: query,
+  onchange: null,
+  addListener: () => {},
+  removeListener: () => {},
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => false,
+})) as typeof window.matchMedia

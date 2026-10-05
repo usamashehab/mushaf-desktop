@@ -10,8 +10,13 @@ const PAD_X = 1.6
 const PAD_Y = 1.1
 const HEAD = 2
 const FOOT = 2
-/** Between facing pages. */
-export const SPREAD_GAP = 1
+/** Between facing pages: none, they meet at the spine. */
+export const SPREAD_GAP = 0
+/** The cover round the pages, each side. */
+export const COVER_X = 0.75
+export const COVER_Y = 0.6
+/** The stacks of page edges either side, in px at most. */
+const STACK_PX = 12
 
 export const textWidthEm = (lineEm: number) => lineEm * LINE_SLACK
 export const pageWidthEm = (lineEm: number) => textWidthEm(lineEm) + 2 * PAD_X
@@ -25,8 +30,8 @@ export const PAGE_BOX = { padX: PAD_X, padY: PAD_Y, head: HEAD, foot: FOOT }
  */
 export function fitFontSize(options: { width: number; height: number; lineEm: number; pages: 1 | 2; zoom: number }): number {
   const { width, height, lineEm, pages, zoom } = options
-  const across = pages * pageWidthEm(lineEm) + (pages - 1) * SPREAD_GAP
-  const size = Math.min(width / across, height / pageHeightEm())
+  const across = pages * pageWidthEm(lineEm) + (pages - 1) * SPREAD_GAP + 2 * COVER_X
+  const size = Math.min((width - 2 * STACK_PX) / across, (height - STACK_PX) / (pageHeightEm() + 2 * COVER_Y))
 
   return Math.max(6, Math.floor(size * zoom * 100) / 100)
 }

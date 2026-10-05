@@ -15,6 +15,7 @@ import {
 import { BookMarked, Bookmark, BookOpen, ChevronLeft, ChevronRight, Columns2, Minus, Moon, Plus, RectangleVertical, Settings2, Sun, SunMoon } from 'lucide-react'
 
 import { AgentAlerts, AgentChip, useAgents, useOpenPlace } from './Agents.tsx'
+import { Book } from './Book.tsx'
 
 import { AyahMenu, PageSlider, Toasts, type Picked, type ToastMessage } from './Chrome.tsx'
 import { ReaderContext, digitsFor, type ReaderState } from './context.tsx'
@@ -217,7 +218,6 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
   const firstWord = data.layout.pages[settings.page - 1]?.lines.flatMap(line => (line.t === 'ayah' ? line.w : [])).at(0)
   const surahOnPage = firstWord?.[0] ?? 1
   const juzOnPage = data.meta.pages[settings.page - 1]?.juz ?? 1
-  const onPage = bookmarksOn(settings, pages)
 
   const state: ReaderState = { data, platform, settings, update, t, n, surahName, open, toast }
   const ThemeIcon = settings.theme === 'night' ? Moon : settings.theme === 'sepia' ? SunMoon : Sun
@@ -302,23 +302,26 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
             </button>
             {view.width > 0 ? (
               // Facing pages read right to left, whatever the interface language.
-              <div className="spread" dir="rtl" key={pages.join('-')}>
-                {pages.map(page => (
-                  <MushafPage
-                    key={page}
-                    data={data}
-                    platform={platform}
-                    page={page}
-                    fontSize={fontSize}
-                    active={active}
-                    bookmarks={onPage}
-                    onPickAyah={(ayah, x, y) => {
-                      setActive(ayah)
-                      setPicked({ ayah, page, x, y })
-                    }}
-                    loadingText={t.loading}
-                  />
-                ))}
+              <div className="spread" style={{ fontSize: `${fontSize}px` }}>
+                <Book
+                  pages={pages}
+                  renderPage={page => (
+                    <MushafPage
+                      key={page}
+                      data={data}
+                      platform={platform}
+                      page={page}
+                      fontSize={fontSize}
+                      active={active}
+                      bookmarks={bookmarksOn(settings, [page])}
+                      onPickAyah={(ayah, x, y) => {
+                        setActive(ayah)
+                        setPicked({ ayah, page, x, y })
+                      }}
+                      loadingText={t.loading}
+                    />
+                  )}
+                />
               </div>
             ) : null}
           </main>

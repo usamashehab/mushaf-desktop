@@ -32,6 +32,8 @@ test('night theme', async ({ page }) => {
 // every line must hold something. A word on the wrong line shows up here first.
 test('no line on any of the 604 pages overflows', async ({ page }) => {
   test.setTimeout(600_000)
+  // No leaves turning: their 3D transforms would bend the boxes measured here.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await open(page, 1)
   const problems: string[] = []
   for (let number = 1; number <= 604; number++) {

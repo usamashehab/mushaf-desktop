@@ -21,6 +21,10 @@
   --word-hover: rgba(169, 132, 63, 0.16);
   --word-active: rgba(31, 107, 83, 0.18);
   --shadow: 0 1px 2px rgba(60, 45, 20, 0.06), 0 8px 28px rgba(60, 45, 20, 0.1);
+  --leather: #1f4537;
+  --leather-deep: #12291f;
+  --tooling: rgba(214, 178, 110, 0.55);
+  --page-edge: #ddd0b1;
   --mark-gold: #c79a3b;
   --mark-green: #2f8f6b;
   --mark-blue: #3b78c2;
@@ -40,6 +44,9 @@
 }
 
 .reader[data-theme='sepia'] {
+  --leather: #5b3a22;
+  --leather-deep: #3a2414;
+  --page-edge: #cdbb92;
   --bg: #ddd0b2;
   --bg-glow: #e9dfc6;
   --surface: rgba(240, 231, 208, 0.88);
@@ -57,6 +64,10 @@
 }
 
 .reader[data-theme='night'] {
+  --leather: #16261f;
+  --leather-deep: #0b1410;
+  --tooling: rgba(201, 168, 106, 0.4);
+  --page-edge: #2a2f2c;
   --bg: #0d1012;
   --bg-glow: #151a1d;
   --surface: rgba(21, 25, 28, 0.88);
@@ -813,15 +824,228 @@
   padding: 4px 48px;
 }
 
-.spread {
-  display: flex;
-  gap: 1em;
-  animation: page-in 120ms ease-out;
+/* ───────────── The book ───────────── */
+
+/* A leather cover with a tooled gold border, the pages laid open on it. */
+.book {
+  position: relative;
+  padding: 0.6em 0.75em;
+  border-radius: 0.55em;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.06), transparent 60%),
+    linear-gradient(160deg, var(--leather), var(--leather-deep));
+  box-shadow:
+    inset 0 0 0 0.12em var(--leather-deep),
+    inset 0 0 0 0.2em var(--tooling),
+    inset 0 0 0 0.26em var(--leather-deep),
+    0 0.25em 0.5em rgba(0, 0, 0, 0.18),
+    0 1.6em 3.2em -0.6em rgba(40, 25, 5, 0.45);
 }
 
-@keyframes page-in {
-  from {
-    opacity: 0.7;
+.book-pages {
+  position: relative;
+  display: flex;
+  perspective: 3200px;
+  /* The edges of the pages read (right) and still to read (left). */
+  box-shadow: var(--stack-read), var(--stack-left);
+  border-radius: 0.2em;
+}
+
+.book.is-single[data-spine='left'] .book-pages {
+  box-shadow: var(--stack-left);
+}
+
+.book.is-single[data-spine='right'] .book-pages {
+  box-shadow: var(--stack-read);
+}
+
+.book-slot {
+  position: relative;
+}
+
+.book .mushaf-page {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The page curves down into the spine. */
+.book-slot::after,
+.book-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.book-slot[data-side='right']::after {
+  background:
+    linear-gradient(to left, rgba(255, 255, 255, 0.18), transparent 6%),
+    linear-gradient(to right, rgba(60, 40, 10, 0.26), rgba(60, 40, 10, 0.08) 3.5%, transparent 9%);
+}
+
+.book-slot[data-side='left']::after {
+  background:
+    linear-gradient(to right, rgba(255, 255, 255, 0.18), transparent 6%),
+    linear-gradient(to left, rgba(60, 40, 10, 0.26), rgba(60, 40, 10, 0.08) 3.5%, transparent 9%);
+}
+
+.book.is-spread .book-pages::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(60, 40, 10, 0.22);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.reader[data-theme='night'] .book-slot::after {
+  opacity: 0.7;
+}
+
+/* ───────────── Turning a leaf ───────────── */
+
+.book-leaf {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  animation-duration: var(--flip-ms);
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.25, 1);
+  animation-fill-mode: both;
+}
+
+/* Next: the left page lifts at its outer edge and turns over to the right. */
+.book-leaf.is-next {
+  left: 0;
+  width: 50%;
+  transform-origin: 100% 50%;
+  animation-name: leaf-next;
+}
+
+/* Back: the right page turns over to the left. */
+.book-leaf.is-prev {
+  right: 0;
+  width: 50%;
+  transform-origin: 0 50%;
+  animation-name: leaf-prev;
+}
+
+/* One page at a time: the whole page turns, and the page before comes back in. */
+.book-leaf.is-whole {
+  left: 0;
+  width: 100%;
+}
+
+.book-leaf.is-in {
+  left: 0;
+  width: 100%;
+  transform-origin: 100% 50%;
+  animation-name: leaf-in;
+}
+
+@keyframes leaf-next {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(180deg); }
+}
+
+@keyframes leaf-prev {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(-180deg); }
+}
+
+@keyframes leaf-in {
+  from { transform: rotateY(180deg); }
+  to { transform: rotateY(0deg); }
+}
+
+.book-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: var(--paper);
+}
+
+.book-face.is-back {
+  transform: rotateY(180deg);
+}
+
+.book-blank {
+  position: absolute;
+  inset: 0;
+  background: var(--paper);
+}
+
+/* Light falls off the leaf as it stands up, and back on as it lies down; it is
+   darkest along the spine, where the paper bends. */
+.book-face::after {
+  opacity: 0;
+  animation: var(--flip-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+
+.book-leaf.is-next .book-face::after,
+.book-leaf.is-in .book-face::after {
+  background: linear-gradient(to left, rgba(40, 25, 5, 0.34), rgba(40, 25, 5, 0.1) 40%, rgba(255, 255, 255, 0.06));
+}
+
+.book-leaf.is-prev .book-face::after {
+  background: linear-gradient(to right, rgba(40, 25, 5, 0.34), rgba(40, 25, 5, 0.1) 40%, rgba(255, 255, 255, 0.06));
+}
+
+.book-face.is-front::after,
+.book-leaf.is-in .book-face.is-back::after {
+  animation-name: shade-rise;
+}
+
+.book-face.is-back::after,
+.book-leaf.is-in .book-face.is-front::after {
+  animation-name: shade-fall;
+}
+
+@keyframes shade-rise {
+  from { opacity: 0; }
+  50% { opacity: 1; }
+  to { opacity: 1; }
+}
+
+@keyframes shade-fall {
+  from { opacity: 1; }
+  50% { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* One page at a time, the leaf has no page on its back: it turns away (or comes
+   back) and is gone once it stands on edge. */
+.book-leaf.is-whole .book-face.is-back,
+.book-leaf.is-in .book-face.is-back {
+  visibility: hidden;
+}
+
+/* The page under the leaf is in its shadow until the leaf has passed. */
+.book-slot.is-under::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  animation: under-shade var(--flip-ms) ease-out both;
+}
+
+@keyframes under-shade {
+  from { background: rgba(40, 25, 5, 0.16); }
+  to { background: rgba(40, 25, 5, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-leaf {
+    animation-duration: 1ms;
   }
 }
 

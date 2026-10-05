@@ -41,7 +41,8 @@ describe('page geometry', () => {
   test('the font size fits the page to the tighter of width and height', () => {
     const tall = fitFontSize({ width: 600, height: 4000, lineEm, pages: 1, zoom: 1 })
     const wide = fitFontSize({ width: 4000, height: 800, lineEm, pages: 1, zoom: 1 })
-    expect(tall).toBeCloseTo(600 / (lineEm * 1.07 + 3.2), 1)
+    // The page, its margins and the cover either side, beside the page edges' 12px.
+    expect(tall).toBeCloseTo((600 - 24) / (lineEm * 1.07 + 3.2 + 1.5), 1)
     expect(wide).toBeLessThan(800 / 30)
     expect(fitFontSize({ width: 600, height: 4000, lineEm, pages: 1, zoom: 1.5 })).toBeCloseTo(tall * 1.5, 0)
   })
