@@ -6,11 +6,12 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use mushaf_ipc::{Request, Response, Session};
+use mushaf_protocol::AgentEvent;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::sessions::{Action, AlertKind, Engine, Notice, Prefs, WindowState};
+use crate::sessions::{Action, AlertKind, Engine, Notice, Prefs, Saved, WindowState};
 
 pub struct Agents {
     engine: Mutex<Engine>,
@@ -26,8 +27,10 @@ pub fn now_ms() -> u64 {
 
 impl Agents {
     pub fn new(settings: &serde_json::Value, paused_until: Option<u64>) -> Self {
+        let mut engine = Engine::paused(paused_until);
+        engine.restore(load_saved(), &take_missed(), now_ms());
         Agents {
-            engine: Mutex::new(Engine::paused(paused_until)),
+            engine: Mutex::new(engine),
             prefs: Mutex::new(Prefs::from_settings(settings)),
             language: Mutex::new(language_of(settings)),
             pending_open: Mutex::new(None),
@@ -151,8 +154,12 @@ fn run<R: Runtime>(app: &AppHandle<R>, actions: Vec<Action>) {
                 let _ = builder.show();
             }
             Action::Sessions => {
-                let sessions = agents.engine.lock().unwrap().sessions();
+                let (sessions, saved) = {
+                    let engine = agents.engine.lock().unwrap();
+                    (engine.sessions(), engine.saved())
+                };
                 let _ = app.emit_to("main", "agent-sessions", &sessions);
+                save(&saved);
             }
         }
     }
@@ -200,6 +207,32 @@ fn transcript_interrupted(agent: &str, session: &str, path: &str) -> bool {
         return false;
     }
     mushaf_protocol::was_interrupted(agent, session, &String::from_utf8_lossy(&tail))
+}
+
+/// The tasks at work when the app last closed.
+fn load_saved() -> Vec<Saved> {
+    std::fs::read(mushaf_ipc::sessions_path()).ok().and_then(|body| serde_json::from_slice(&body).ok()).unwrap_or_default()
+}
+
+/// The events the hooks kept while the app wasn't running, taken once.
+fn take_missed() -> Vec<AgentEvent> {
+    let path = mushaf_ipc::missed_path();
+    let Ok(body) = std::fs::read_to_string(&path) else { return vec![] };
+    let _ = std::fs::remove_file(&path);
+    body.lines().filter_map(|line| serde_json::from_str(line).ok()).collect()
+}
+
+/// Keeps the tasks at work for the next start, through a temporary file.
+fn save(saved: &[Saved]) {
+    let path = mushaf_ipc::sessions_path();
+    let Ok(body) = serde_json::to_vec(saved) else { return };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let partial = path.with_extension("json.part");
+    if std::fs::write(&partial, body).is_ok() {
+        let _ = std::fs::rename(&partial, &path);
+    }
 }
 
 /// Starts the socket server and the once-a-second clock. A second app can't

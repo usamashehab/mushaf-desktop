@@ -105,8 +105,15 @@ fn hook(agent: &str, kind: Option<&str>) {
     let Some(event) = normalize(agent, &payload, forced, now_ms()) else { return };
     let starts = event.kind == Kind::Started;
     let request = Request::Event(event);
-    if send(&request).is_ok() || !starts {
-        // Only a starting task wakes the app: an end with nothing open has nothing to show.
+    if send(&request).is_ok() {
+        return;
+    }
+    if !starts {
+        // Only a starting task wakes the app. An end is kept for it, so it doesn't
+        // take the task for one still at work when it next starts.
+        if let Request::Event(event) = &request {
+            keep_missed(event);
+        }
         return;
     }
     if launch_app(true).is_ok() {
@@ -138,6 +145,22 @@ fn agy_log(conversation: &str) -> Option<PathBuf> {
     };
     let named = (!conversation.is_empty()).then(|| logs.iter().find(|(_, path)| names(path) == Some(true))).flatten();
     named.or(logs.first()).map(|(_, path)| path.clone())
+}
+
+/// Adds an event to the missed list; a list grown past 256 KB starts over.
+fn keep_missed(event: &mushaf_protocol::AgentEvent) {
+    use std::io::Write;
+    let path = mushaf_ipc::missed_path();
+    let Ok(mut line) = serde_json::to_string(event) else { return };
+    line.push('\n');
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let full = std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 256 * 1024);
+    let file = std::fs::OpenOptions::new().create(true).append(!full).write(true).truncate(full).open(&path);
+    if let Ok(mut file) = file {
+        let _ = file.write_all(line.as_bytes());
+    }
 }
 
 /// Retries while the app starts up.

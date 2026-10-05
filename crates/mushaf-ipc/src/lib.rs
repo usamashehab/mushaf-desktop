@@ -99,6 +99,18 @@ pub fn home_dir() -> PathBuf {
     std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// Where the hooks keep the events the app missed while it wasn't running (a
+/// task finishing, a session ending), one JSON event a line, for the app to
+/// take when it starts.
+pub fn missed_path() -> PathBuf {
+    home_dir().join(".mushaf").join("missed.jsonl")
+}
+
+/// Where the app keeps the tasks at work, to know them again after a restart.
+pub fn sessions_path() -> PathBuf {
+    home_dir().join(".mushaf").join("sessions.json")
+}
+
 fn name(path: &std::path::Path) -> io::Result<Name<'_>> {
     #[cfg(windows)]
     {

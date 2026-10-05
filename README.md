@@ -121,7 +121,9 @@ project folder's name, and, for Claude Code, Codex and Antigravity, where the se
 transcript or log file is. Prompts and replies never leave the hook. Those three agents
 have no hook for a task you stop with Esc, so the app reads the file's last lines (at
 most 64 KB) to notice one. Nothing leaves your computer: the app and the hooks talk over
-a local socket only you can open.
+a local socket only you can open. So that a restart doesn't lose track of the agents at
+work, the app keeps them in `~/.mushaf/sessions.json`, and while it isn't running the hooks
+keep a finishing task's event in `~/.mushaf/missed.jsonl`; both hold only the fields above.
 
 ## Settings
 

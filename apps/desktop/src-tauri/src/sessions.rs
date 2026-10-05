@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use mushaf_ipc::{Heard, Session};
 use mushaf_protocol::{says_started_mid_task, AgentEvent, Kind};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// A task this long without a word from its agent is forgotten.
@@ -167,13 +167,22 @@ pub enum Action {
     Sessions,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Tracked {
     project: Option<String>,
     transcript: Option<String>,
     started_at: u64,
     due: Option<u64>,
     opened: bool,
+}
+
+/// A task at work as the app keeps it across a restart.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Saved {
+    agent: String,
+    session: String,
+    #[serde(flatten)]
+    tracked: Tracked,
 }
 
 type Key = (String, String);
@@ -200,6 +209,32 @@ pub struct Engine {
 impl Engine {
     pub fn paused(until: Option<u64>) -> Self {
         Engine { paused_until: until, ..Engine::default() }
+    }
+
+    /// The tasks at work, to keep while the app is closed.
+    pub fn saved(&self) -> Vec<Saved> {
+        self.sessions
+            .iter()
+            .map(|((agent, session), tracked)| Saved { agent: agent.clone(), session: session.clone(), tracked: tracked.clone() })
+            .collect()
+    }
+
+    /// Takes back the tasks kept at the last close, less the ones too old and
+    /// the ones whose end came while the app was closed (`missed`). Missed
+    /// events alert no one: they are over.
+    pub fn restore(&mut self, saved: Vec<Saved>, missed: &[AgentEvent], now: u64) {
+        for Saved { agent, session, tracked } in saved {
+            if now.saturating_sub(tracked.started_at) < FORGET_AFTER_MS {
+                self.sessions.insert((agent, session), tracked);
+            }
+        }
+        for event in missed {
+            let key = (event.agent.clone(), event.session.clone());
+            let ends = matches!(event.kind, Kind::Finished | Kind::Ended);
+            if ends && self.sessions.get(&key).is_some_and(|tracked| event.at >= tracked.started_at) {
+                self.sessions.remove(&key);
+            }
+        }
     }
 
     pub fn is_paused(&self, now: u64) -> bool {
@@ -622,6 +657,36 @@ mod tests {
         engine.on_event(&event(Kind::Started, "b"), MIN, &prefs, HIDDEN);
         let claude = engine.sessions().into_iter().find(|s| s.agent == "claude").unwrap();
         assert_eq!(claude.opens_at, Some(3 * MIN));
+    }
+
+    #[test]
+    fn a_restart_keeps_the_tasks_at_work() {
+        let prefs = Prefs::default();
+        let mut engine = Engine::default();
+        let codex = |kind, session: &str| AgentEvent { agent: "codex".into(), ..event(kind, session) };
+        for session in ["a", "b", "c"] {
+            engine.on_event(&event(Kind::Started, session), 0, &prefs, HIDDEN);
+        }
+        engine.on_event(&codex(Kind::Started, "x"), 0, &prefs, HIDDEN);
+        let wire = serde_json::to_string(&engine.saved()).unwrap();
+
+        // While the app was closed: a finished, x ended, c asked something.
+        let missed = [
+            AgentEvent { at: MIN, ..event(Kind::Finished, "a") },
+            AgentEvent { at: MIN, ..codex(Kind::Ended, "x") },
+            AgentEvent { at: 0, ..event(Kind::Attention, "c") },
+        ];
+        let mut again = Engine::default();
+        again.restore(serde_json::from_str(&wire).unwrap(), &missed, 90_000);
+        let left: Vec<_> = again.sessions().into_iter().map(|s| s.session).collect();
+        assert_eq!(left, ["b", "c"]);
+        // Still opens on time, from when the task began.
+        assert_eq!(again.on_tick(2 * MIN, &prefs, HIDDEN, None, NO)[0], Action::Open { focus: true });
+
+        // Too old to keep.
+        let mut late = Engine::default();
+        late.restore(serde_json::from_str(&wire).unwrap(), &[], FORGET_AFTER_MS + 1);
+        assert!(late.sessions().is_empty());
     }
 
     #[test]
