@@ -14,55 +14,38 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
 - [For AI assistants](#for-ai-assistants)
 - [Development](#development)
 
-> **Status: early development (0.1.0).** Built and tested on Linux (Ubuntu, GNOME, X11).
-> The Windows and macOS builds come from the same code but have not been tested yet.
+> **Status: early development (0.1.0).** Tested by hand on Linux (Ubuntu, GNOME, X11).
+> The Windows and macOS installers are built from the same code but not yet tested by hand.
 > For a Mushaf inside the Claude Code terminal, see
 > [claude-quran](https://github.com/usamashehab/claude-quran).
 
 ## Install
 
-There are no prebuilt downloads yet: build the installer once, then install it. This takes
-a few minutes, most of it compiling.
+1. Download the file for your computer from the
+   **[latest release](https://github.com/usamashehab/mushaf-desktop/releases/latest)**:
 
-### Linux (Debian, Ubuntu)
+   | Computer | File |
+   | --- | --- |
+   | Linux: Ubuntu, Debian, Mint | `Mushaf_0.1.0_amd64.deb` |
+   | Linux: Fedora, openSUSE | `Mushaf-0.1.0-1.x86_64.rpm` |
+   | Windows 10 or 11 | `Mushaf_0.1.0_x64-setup.exe` |
+   | Mac with Apple silicon (M1 or later) | `Mushaf_0.1.0_aarch64.dmg` |
 
-1. Install the build tools: [Rust](https://rustup.rs), Node.js 22 or newer, and the
-   system libraries [Tauri needs](https://v2.tauri.app/start/prerequisites/#linux):
+2. Install it:
 
-   ```sh
-   sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
-     libssl-dev libayatana-appindicator3-dev librsvg2-dev
-   ```
+   - **Ubuntu, Debian:** double-click the file, or in a terminal, in the folder you saved it to:
+     `sudo apt install ./Mushaf_0.1.0_amd64.deb`
+   - **Fedora:** `sudo dnf install ./Mushaf-0.1.0-1.x86_64.rpm`
+   - **Windows:** run the file. The installer isn't signed, so Windows may show
+     "Windows protected your PC": choose **More info**, then **Run anyway**.
+   - **Mac:** open the `.dmg` and drag **Mushaf** to Applications. The app isn't notarized
+     by Apple, so the first time, run this in Terminal before opening it:
+     `xattr -cr /Applications/Mushaf.app`
 
-2. Build the installer:
-
-   ```sh
-   git clone https://github.com/usamashehab/mushaf-desktop.git
-   cd mushaf-desktop
-   corepack enable
-   pnpm install
-   pnpm --dir apps/desktop exec tauri build --bundles deb
-   ```
-
-3. Install it:
-
-   ```sh
-   sudo apt install ./target/release/bundle/deb/Mushaf_0.1.0_amd64.deb
-   ```
-
-   This puts the app at `/usr/bin/mushaf-desktop`, the `mushaf` command at
-   `/usr/bin/mushaf`, and **Mushaf** in your applications menu.
-
-4. Open **Mushaf**. The first time, it downloads the page fonts (about 95 MB) once;
+3. Open **Mushaf**. The first time, it downloads the page fonts (about 95 MB) once;
    after that it works offline.
 
-### Windows and macOS (untested)
-
-Build with `pnpm --dir apps/desktop exec tauri build` after Tauri's
-[prerequisites](https://v2.tauri.app/start/prerequisites/) for your system. On Windows,
-run `cargo build --release -p mushaf-cli` first: the installer packs `mushaf.exe` from
-`target/release`. On macOS, `mushaf` is inside the app, at
-`Mushaf.app/Contents/MacOS/mushaf`, not on your `PATH`.
+4. Connect your coding agent: see the next section.
 
 ## Connect your coding agent
 
@@ -151,6 +134,11 @@ Quran's text, or to go somewhere: `50` (a page), `2:255` (an ayah), `البقر�
 
 ## The `mushaf` command
 
+On Linux it is installed as `/usr/bin/mushaf`. On a Mac it is
+`/Applications/Mushaf.app/Contents/MacOS/mushaf`, and on Windows `mushaf.exe` in the folder
+Mushaf is installed in. Neither is on your `PATH`; the app's Settings do the same as
+`mushaf integrations`.
+
 | Command | Does |
 | --- | --- |
 | `mushaf open [place]` | Shows the Mushaf, starting it if needed. `place` is a page (`50`), an ayah (`2:255`) or a surah name (`البقرة`) |
@@ -185,13 +173,16 @@ Start with `mushaf status`. It prints a line per agent like
 
 ## Uninstall
 
-```sh
-mushaf integrations uninstall        # first, while the mushaf command is still there
-sudo apt remove mushaf
-```
+First turn off each agent in Settings (or run `mushaf integrations uninstall`), so your
+agents don't keep calling a program that's gone. Then:
 
-This leaves your settings, bookmarks and the downloaded fonts. To remove those too:
-`rm -rf ~/.config/app.mushaf.desktop ~/.local/share/app.mushaf.desktop ~/.mushaf`.
+- **Ubuntu, Debian:** `sudo apt remove mushaf`
+- **Fedora:** `sudo dnf remove mushaf`
+- **Windows:** Settings → Apps → Mushaf → Uninstall
+- **Mac:** drag Mushaf from Applications to the Bin
+
+This leaves your settings, bookmarks and the downloaded fonts. On Linux, to remove those
+too: `rm -rf ~/.config/app.mushaf.desktop ~/.local/share/app.mushaf.desktop ~/.mushaf`.
 
 ## For AI assistants
 
@@ -205,28 +196,35 @@ check fails.
   `mushaf integrations install` / `uninstall`: they keep the user's own hooks and back the
   file up first.
 - Never write Codex's hook trust yourself. Trusting hooks is the user's decision: ask them
-  to do it (step 5).
+  to do it (step 4).
 - `sudo` needs the user's password. Ask the user to run that command, or in Claude Code
   to type it with a `!` in front.
 
 **Steps (Linux, Debian or Ubuntu)**
 
+On Windows or a Mac, have the user follow [Install](#install) instead, then connect the
+agents in the app's Settings; the `mushaf` command isn't on the `PATH` there.
+
 1. Check what is there already:
    `command -v mushaf mushaf-desktop; mushaf integrations; claude --version; codex --version`.
-   If `mushaf` exists and the agents say `on`, go to step 6.
-2. Install the prerequisites in [Install](#install) step 1. Check: `cargo --version` and
-   `node --version` (22 or newer).
-3. Build: run the commands in [Install](#install) step 2. Check:
-   `ls target/release/bundle/deb/Mushaf_*_amd64.deb`.
-4. Install the `.deb` (the user runs it, since it needs `sudo`):
-   `sudo apt install ./target/release/bundle/deb/Mushaf_0.1.0_amd64.deb`.
+   If `mushaf` exists and the agents say `on`, go to step 5.
+2. Download the latest `.deb`:
+
+   ```sh
+   url=$(curl -s https://api.github.com/repos/usamashehab/mushaf-desktop/releases/latest \
+     | grep -o 'https://[^"]*_amd64\.deb' | head -1)
+   curl -L -o /tmp/mushaf.deb "$url"
+   ```
+
+   Check: `dpkg-deb -f /tmp/mushaf.deb Package` prints `mushaf`.
+3. Install it (the user runs it, since it needs `sudo`): `sudo apt install /tmp/mushaf.deb`.
    Check: `command -v mushaf` prints `/usr/bin/mushaf`.
-5. Connect the agents: `mushaf integrations install`. Check: `mushaf integrations` shows
+4. Connect the agents: `mushaf integrations install`. Check: `mushaf integrations` shows
    `on` for each agent the user has. If Codex is connected, tell the user to start `codex`
    once and choose **Trust all and continue**.
-6. Open the app once so it downloads its fonts: `mushaf open`. Check: `mushaf status`
+5. Open the app once so it downloads its fonts: `mushaf open`. Check: `mushaf status`
    prints `The Mushaf app 0.1.0 is running.`
-7. Verify the connection with a short task in each agent (for example, ask it to reply
+6. Verify the connection with a short task in each agent (for example, ask it to reply
    "ok"), then run `mushaf status`. It must show `Last heard from Claude: ...` (or `Codex`)
    from a few seconds ago.
 
@@ -256,6 +254,28 @@ each glyph a whole word as the 1421H Madinah print draws it, placed on the line 
 sits on in that print. Nothing is shaped or wrapped by the computer.
 
 ## Development
+
+### Build the installer yourself
+
+On Linux, with [Rust](https://rustup.rs), Node.js 22 or newer, and the system libraries
+[Tauri needs](https://v2.tauri.app/start/prerequisites/#linux):
+
+```sh
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
+  libssl-dev libayatana-appindicator3-dev librsvg2-dev
+git clone https://github.com/usamashehab/mushaf-desktop.git
+cd mushaf-desktop
+corepack enable    # turns on pnpm, the package manager this repo uses
+pnpm install
+pnpm --dir apps/desktop exec tauri build --bundles deb
+sudo apt install ./target/release/bundle/deb/Mushaf_0.1.0_amd64.deb
+```
+
+On Windows and macOS, follow Tauri's [prerequisites](https://v2.tauri.app/start/prerequisites/)
+and run `cargo build --release -p mushaf-cli` before `pnpm --dir apps/desktop exec tauri build`.
+Pushing a `v*` tag builds all the installers on GitHub (`.github/workflows/release.yml`).
+
+### Work on the code
 
 ```
 apps/desktop/       the app: the reader in a Tauri shell (src-tauri/: fonts, settings, agents, tray)
