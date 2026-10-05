@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { agentSettings, parseGoTo, type OpenStyle, type Settings } from '@mushaf/core'
-import { BellRing, CheckCircle2, CirclePause, Hand, Play, X } from 'lucide-react'
+import { BellRing, CheckCircle2, ChevronDown, CirclePause, Hand, Play, X } from 'lucide-react'
 
 import { useReader } from './context.tsx'
 import type { AgentAlert, AgentSession, AgentsBridge, Integration } from './platform.ts'
@@ -219,6 +219,8 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on:
 function AgentRow({ integration, onChange }: { integration: Integration; onChange: (next: Integration) => void }) {
   const { t, n, settings, update, platform, toast } = useReader()
   const [busy, setBusy] = useState(false)
+  // One line per agent; its minutes and notes open on a click.
+  const [open, setOpen] = useState(false)
   const prefs = agentSettings(settings, integration.id)
   const connected = integration.status === 'on'
   const state =
@@ -239,6 +241,8 @@ function AgentRow({ integration, onChange }: { integration: Integration; onChang
     setBusy(true)
     try {
       onChange(await platform.agents.setIntegration(integration.id, on))
+      // Just connected: show its minutes, and what to do once (trust, restart).
+      setOpen(on)
     } catch (error) {
       toast(String(error))
     } finally {
@@ -248,13 +252,22 @@ function AgentRow({ integration, onChange }: { integration: Integration; onChang
   const setMinutes = (minutes: number) =>
     update(current => ({ ...current, agents: { ...current.agents, [integration.id]: { ...agentSettings(current, integration.id), openAfterMinutes: minutes } } }))
 
+  const minutes = (value: number) => (value === 0 ? t.never : t.minutes(value, n(value)))
+  const expanded = connected && open
+
   return (
-    <div className={`agent-row is-${integration.status}`}>
+    <div className={`agent-row is-${integration.status}${expanded ? ' is-open' : ''}`}>
       <div className="agent-row-head">
-        <span className="agent-row-name">
-          <strong>{integration.name}</strong>
-          <span className="agent-row-state">{state}</span>
-        </span>
+        <button type="button" className="agent-row-name" disabled={!connected} aria-expanded={connected ? expanded : undefined} onClick={() => setOpen(!open)}>
+          <strong>
+            {integration.name}
+            {connected ? <ChevronDown size={14} className="agent-row-chevron" aria-hidden="true" /> : null}
+          </strong>
+          <span className="agent-row-state">
+            {state}
+            {connected ? ` — ${prefs.openAfterMinutes === 0 ? t.opensNever : t.opensAfter(minutes(prefs.openAfterMinutes))}` : ''}
+          </span>
+        </button>
         {integration.status === 'stale' ? (
           <button type="button" className="agent-row-fix" disabled={busy} onClick={() => void connect(true)}>
             {t.reconnect}
@@ -263,14 +276,14 @@ function AgentRow({ integration, onChange }: { integration: Integration; onChang
           <Switch on={connected} disabled={busy || integration.status === 'missing' || integration.status === 'error'} onChange={on => void connect(on)} label={`${t.connect} ${integration.name}`} />
         )}
       </div>
-      {connected ? (
+      {expanded ? (
         <>
           <label className="agent-row-field">
             <span>{t.openAfter}</span>
             <select value={prefs.openAfterMinutes} onChange={event => setMinutes(Number(event.target.value))}>
-              {(MINUTE_CHOICES.includes(prefs.openAfterMinutes) ? MINUTE_CHOICES : [...MINUTE_CHOICES, prefs.openAfterMinutes].sort((a, b) => a - b)).map(minutes => (
-                <option key={minutes} value={minutes}>
-                  {minutes === 0 ? t.never : t.minutes(minutes, n(minutes))}
+              {(MINUTE_CHOICES.includes(prefs.openAfterMinutes) ? MINUTE_CHOICES : [...MINUTE_CHOICES, prefs.openAfterMinutes].sort((a, b) => a - b)).map(value => (
+                <option key={value} value={value}>
+                  {minutes(value)}
                 </option>
               ))}
             </select>

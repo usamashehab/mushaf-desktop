@@ -63,6 +63,8 @@ const ar = {
   reconnect: 'أعد الربط',
   openAfter: 'افتح المصحف بعد',
   never: 'لا تفتحه',
+  opensAfter: (minutes: string) => `يُفتح بعد ${minutes}`,
+  opensNever: 'لا يُفتح له',
   minutes: (count: number, digits: string) =>
     count === 1 ? 'دقيقة' : count === 2 ? 'دقيقتين' : count <= 10 ? `${digits} دقائق` : `${digits} دقيقة`,
   short: (digits: string) => `${digits} د`,
@@ -162,6 +164,8 @@ const en: Strings = {
   reconnect: 'Reconnect',
   openAfter: 'Open the Mushaf after',
   never: 'Never',
+  opensAfter: (minutes: string) => `opens after ${minutes}`,
+  opensNever: "doesn't open for it",
   minutes: (count, digits) => (count === 1 ? '1 minute' : `${digits} minutes`),
   short: digits => `${digits} min`,
   codexTrust: 'Codex asks once to trust new hooks: start codex and choose "Trust all and continue".',
