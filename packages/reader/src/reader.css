@@ -1004,6 +1004,10 @@
 /* ───────────── The Mushaf page ───────────── */
 
 .mushaf-page {
+  /* No hinting: Chromium (and so WebView2 on Windows) runs the QCF fonts' hinting
+     instructions, which pull some glyphs apart, e.g. the "١" of ayah 19 on page 4
+     drawn as a long stroke down into the next line. */
+  text-rendering: geometricPrecision;
   position: relative;
   box-sizing: content-box;
   display: flex;
