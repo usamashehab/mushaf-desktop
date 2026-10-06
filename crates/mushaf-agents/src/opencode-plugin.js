@@ -1,11 +1,11 @@
-// The Mushaf: tells the Mushaf app when an OpenCode session starts working, finishes,
-// or waits for you. Added by `mushaf integrations install opencode`; remove it with
-// `mushaf integrations uninstall opencode`. Only the session id and the folder are passed on.
+// __TITLE_CASE__: tells __TITLE__ app when an OpenCode session starts working, finishes,
+// or waits for you. Added by `__SLUG__ integrations install opencode`; remove it with
+// `__SLUG__ integrations uninstall opencode`. Only the session id and the folder are passed on.
 import { spawn } from "node:child_process"
 
-const CLI = __MUSHAF_CLI__
+const CLI = __CLI__
 
-export const MushafPlugin = async ({ directory }) => {
+export const __EXPORT__ = async ({ directory }) => {
   // Sub-agents' sessions work inside their parent's task.
   const children = new Set()
   const working = new Set()

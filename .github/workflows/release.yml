@@ -50,3 +50,22 @@ jobs:
           releaseName: Mushaf ${{ github.ref_name }}
           releaseBody: See the README for how to install and connect your coding agent.
           releaseDraft: true
+
+  # The Mushaf as an extension of another app: one HTML page and its
+  # extension.json, put on the same draft release.
+  extension:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir extensions/mushaf build
+      - name: Check the extension's version is the tag's
+        run: test "v$(node -p 'require("./extensions/mushaf/package.json").version')" = "${{ github.ref_name }}"
+      - run: gh release upload "${{ github.ref_name }}" extensions/mushaf/dist/mushaf-extension.html extensions/mushaf/dist/extension.json --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,5 @@
 //! How long the user has left the keyboard and mouse, as the system tells it.
-//! None when it can't tell: then the Mushaf opens on time, as if they had.
+//! None when it can't tell: then the app opens on time, as if they had.
 
 pub fn idle_ms() -> Option<u64> {
     platform::idle_ms()

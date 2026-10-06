@@ -8,8 +8,8 @@ const KEY = 'mushaf.settings'
 
 /** The reader in a plain browser: fonts from the dev server, settings in localStorage. */
 export const webPlatform: Platform = {
-  pageFontUrl: (pack, page) => `/fonts/${pageFontPath(pack, page)}`,
-  extraFontUrl: (pack, which) => `/fonts/${extraFontPath(pack, which)}`,
+  pageFont: (pack, page) => `/fonts/${pageFontPath(pack, page)}`,
+  extraFont: (pack, which) => `/fonts/${extraFontPath(pack, which)}`,
   loadSettings: async () => {
     try {
       return JSON.parse(localStorage.getItem(KEY) ?? 'null') as unknown

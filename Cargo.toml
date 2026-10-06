@@ -10,6 +10,7 @@ version = "0.2.1"
 
 [workspace.dependencies]
 mushaf-agents = { path = "crates/mushaf-agents" }
+mushaf-engine = { path = "crates/mushaf-engine" }
 mushaf-ipc = { path = "crates/mushaf-ipc" }
 mushaf-protocol = { path = "crates/mushaf-protocol" }
 serde = { version = "1", features = ["derive"] }

@@ -79,3 +79,29 @@ export function checkManifest(manifest: PackManifest): string[] {
 
   return problems
 }
+
+/** A font of a pack, named by where it lives under a fonts folder. */
+export interface FontFile {
+  name: string
+  url: string
+  size: number
+  sha256: string
+}
+
+const baseName = (url: string) => url.split('/').at(-1) ?? url
+
+/** Every font a pack needs: its page fonts, then the surah-name and basmala fonts. */
+export const fontFiles = (pack: PackManifest): FontFile[] => [
+  ...pack.fonts.files.map(file => ({
+    name: pageFontPath(pack, file.page),
+    url: file.url,
+    size: file.size,
+    sha256: file.sha256,
+  })),
+  ...Object.values(pack.extras).map(file => ({ name: `extras/${baseName(file.url)}`, ...file })),
+]
+
+/** Where a font file of `pack` lives, under a fonts folder. */
+export const pageFontPath = (pack: PackManifest, page: number) => `${pack.id}/p${page}.${pack.fonts.format}`
+export const extraFontPath = (pack: PackManifest, which: keyof PackManifest['extras']) =>
+  `extras/${baseName(pack.extras[which].url)}`

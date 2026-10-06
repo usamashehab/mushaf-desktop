@@ -2224,6 +2224,7 @@ dependencies = [
 name = "mushaf-agents"
 version = "0.2.1"
 dependencies = [
+ "mushaf-protocol",
  "serde_json",
  "tempfile",
  "toml_edit 0.25.15+spec-1.1.0",
@@ -2246,6 +2247,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "mushaf-agents",
+ "mushaf-engine",
  "mushaf-ipc",
  "mushaf-protocol",
  "reqwest 0.12.28",
@@ -2258,6 +2260,16 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "mushaf-engine"
+version = "0.2.1"
+dependencies = [
+ "mushaf-ipc",
+ "mushaf-protocol",
+ "serde",
+ "serde_json",
  "user-idle",
  "zbus",
 ]

@@ -1,11 +1,14 @@
 //! What to do about the agents at work: the rules, apart from windows and clocks.
 //!
-//! An agent that has worked on one task for its minutes is ready for the Mushaf,
-//! and the Mushaf opens when the user is waiting: away from the keyboard, with
-//! no agent asking them something, and not just after they put it away. With
-//! several agents that is one opening, not one each. When an agent finishes, or
-//! stops to wait for the user, the Mushaf shows a banner if it is open, and a
-//! notification or a sound if asked for; ones that come together go as one.
+//! An agent that has worked on one task for its minutes is ready for the app
+//! (the Mushaf, or another app built on these crates), and the app opens when
+//! the user is waiting: away from the keyboard, with no agent asking them
+//! something, and not just after they put it away. With several agents that is
+//! one opening, not one each. When an agent finishes, or stops to wait for the
+//! user, the app shows a banner if it is open, and a notification or a sound if
+//! asked for; ones that come together go as one.
+
+pub mod idle;
 
 use std::collections::BTreeMap;
 
@@ -20,11 +23,11 @@ const FORGET_AFTER_MS: u64 = 6 * 60 * 60 * 1000;
 const CHECK_EVERY_MS: u64 = 5_000;
 /// The user counts as waiting after this long without a key or the mouse.
 pub const IDLE_MS: u64 = 30_000;
-/// An agent's question holds the Mushaf back until the user next touches the
+/// An agent's question holds the app back until the user next touches the
 /// keyboard or mouse (most likely to answer it: no hook says so), or this long
 /// when the system can't tell.
 const WAITING_HOLDS_MS: u64 = 10 * 60_000;
-/// Put away after it opened by itself, the Mushaf stays away this long.
+/// Put away after it opened by itself, the app stays away this long.
 const PUT_AWAY_HOLDS_MS: u64 = 10 * 60_000;
 /// Alerts this close together make one notification, and one chime.
 const BATCH_MS: u64 = 4_000;
@@ -39,7 +42,7 @@ pub struct AgentPrefs {
     pub open_after_minutes: f64,
 }
 
-/// How the Mushaf opens for an agent at work.
+/// How the app opens for an agent at work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenStyle {
     /// Shown and brought to the front.
@@ -152,7 +155,7 @@ pub struct Alert {
 pub enum Notice {
     /// Agents that finished or wait for the user, close together.
     Alerts(Vec<Alert>),
-    /// The Mushaf is ready for these agents at work (the `Notify` open style).
+    /// The app is ready for these agents at work (the `Notify` open style).
     Working(Vec<String>),
 }
 
@@ -160,7 +163,7 @@ pub enum Notice {
 pub enum Action {
     /// Show the window for an agent at work; bring it to the front when `focus`.
     Open { focus: bool },
-    /// A banner inside the Mushaf.
+    /// A banner inside the app.
     Alert(Alert),
     Notify { notice: Notice, sound: bool },
     /// The sessions list changed.
@@ -194,16 +197,23 @@ pub struct Engine {
     heard: BTreeMap<String, Heard>,
     /// Sessions waiting on the user (a permission, a question), since when.
     waiting: BTreeMap<Key, u64>,
-    /// The window is up because the Mushaf opened itself.
+    /// The window is up because the app opened itself.
     shown_by_itself: bool,
-    /// When the user last put away the Mushaf that had opened itself.
+    /// When the user last put away the app that had opened itself.
     put_away_at: Option<u64>,
+    /// When the app last opened itself.
+    opened_at: Option<u64>,
+    /// When an agent last finished or asked the user something.
+    called_at: Option<u64>,
     /// Alerts for a notification, gathered for `BATCH_MS` from the first.
     batch: Vec<Alert>,
     last_chime: Option<u64>,
     next_check: u64,
     /// No opening and no alerts before this (ms since the epoch).
     pub paused_until: Option<u64>,
+    /// The app has nothing to show for now (say, all of today's goals are
+    /// done): tasks that are due wait, and open once it has.
+    pub nothing_to_open: bool,
 }
 
 impl Engine {
@@ -251,6 +261,9 @@ impl Engine {
             self.waiting.insert(key.clone(), now);
         } else {
             self.waiting.remove(&key);
+        }
+        if matches!(event.kind, Kind::Finished | Kind::Attention) && agent.enabled {
+            self.called_at = Some(now);
         }
         match event.kind {
             // Some agents say "started" again mid-task: the task goes on.
@@ -311,7 +324,7 @@ impl Engine {
 
     /// Run about once a second. A task the user interrupted ends without a hook,
     /// so its transcript is looked at every few seconds: then it is forgotten
-    /// before the Mushaf opens for it. `idle` is how long the user has left the
+    /// before the app opens for it. `idle` is how long the user has left the
     /// keyboard and mouse, when the system says.
     pub fn on_tick(&mut self, now: u64, prefs: &Prefs, window: WindowState, idle: Option<u64>, interrupted: Interrupted) -> Vec<Action> {
         let mut actions = vec![];
@@ -331,14 +344,20 @@ impl Engine {
         self.waiting.retain(|_, since| now.saturating_sub(*since) < WAITING_HOLDS_MS && last_input.is_none_or(|input| input < *since));
         if self.shown_by_itself && !window.visible {
             self.shown_by_itself = false;
-            self.put_away_at = Some(now);
+            // Put away while the agents still work, it stays away a while. Put
+            // away after one finished or asked something, the user went back to
+            // it: the next task opens it as usual.
+            let called = self.called_at.zip(self.opened_at).is_some_and(|(called, opened)| called >= opened);
+            if !called {
+                self.put_away_at = Some(now);
+            }
         }
         if self.batch.first().is_some_and(|first| now.saturating_sub(first.at) >= BATCH_MS) {
             let batch = std::mem::take(&mut self.batch);
             let sound = batch.iter().any(|alert| alert.sound && !alert.banner);
             actions.push(Action::Notify { notice: Notice::Alerts(batch), sound });
         }
-        if self.is_paused(now) {
+        if self.is_paused(now) || self.nothing_to_open {
             return actions;
         }
         let ready: Vec<String> = self
@@ -369,6 +388,7 @@ impl Engine {
             }
             style => {
                 self.shown_by_itself = true;
+                self.opened_at = Some(now);
                 actions.insert(0, Action::Open { focus: style == OpenStyle::Front });
             }
         }
@@ -376,7 +396,7 @@ impl Engine {
     }
 
     /// Whether opening now interrupts nothing: the user has left the keyboard,
-    /// no agent asks them something, and they didn't just put the Mushaf away.
+    /// no agent asks them something, and they didn't just put the app away.
     fn user_is_waiting(&self, now: u64, prefs: &Prefs, idle: Option<u64>) -> bool {
         let typing = prefs.only_when_idle && idle.is_some_and(|idle| idle < IDLE_MS);
         let asked = !self.waiting.is_empty();
@@ -550,6 +570,40 @@ mod tests {
         assert!(!opens(&engine.on_tick(5 * MIN, &prefs, HIDDEN, None, NO)));
         assert!(!opens(&engine.on_tick(13 * MIN - 1, &prefs, HIDDEN, None, NO)));
         assert!(opens(&engine.on_tick(13 * MIN, &prefs, HIDDEN, None, NO)), "b, still at work after the hold");
+    }
+
+    #[test]
+    fn put_away_after_the_agent_finished_it_opens_for_the_next_task() {
+        let prefs = Prefs::default();
+        let mut engine = Engine::default();
+        engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
+        assert!(opens(&engine.on_tick(2 * MIN, &prefs, HIDDEN, None, NO)));
+        engine.on_tick(2 * MIN + 1_000, &prefs, FRONT, None, NO);
+        engine.on_event(&event(Kind::Finished, "a"), 3 * MIN, &prefs, FRONT);
+        // Back to work: the user hides it to answer the agent.
+        engine.on_tick(3 * MIN + 1_000, &prefs, HIDDEN, None, NO);
+        engine.on_event(&event(Kind::Started, "b"), 4 * MIN, &prefs, HIDDEN);
+        assert!(opens(&engine.on_tick(6 * MIN, &prefs, HIDDEN, None, NO)), "no hold");
+
+        // The same after a question.
+        engine.on_tick(6 * MIN + 1_000, &prefs, FRONT, None, NO);
+        engine.on_event(&event(Kind::Attention, "b"), 7 * MIN, &prefs, FRONT);
+        engine.on_tick(7 * MIN + 1_000, &prefs, HIDDEN, None, NO);
+        engine.on_event(&event(Kind::Started, "b"), 8 * MIN, &prefs, HIDDEN);
+        engine.on_event(&event(Kind::Started, "c"), 8 * MIN, &prefs, HIDDEN);
+        assert!(opens(&engine.on_tick(10 * MIN, &prefs, HIDDEN, None, NO)), "no hold");
+    }
+
+    #[test]
+    fn nothing_to_open_holds_due_tasks_until_there_is() {
+        let prefs = Prefs::default();
+        let mut engine = Engine { nothing_to_open: true, ..Engine::default() };
+        engine.on_event(&event(Kind::Started, "a"), 0, &prefs, HIDDEN);
+        assert!(!opens(&engine.on_tick(2 * MIN, &prefs, HIDDEN, None, NO)));
+        assert!(!opens(&engine.on_tick(5 * MIN, &prefs, HIDDEN, None, NO)));
+        assert!(!engine.sessions()[0].opened);
+        engine.nothing_to_open = false;
+        assert!(opens(&engine.on_tick(5 * MIN + 1_000, &prefs, HIDDEN, None, NO)));
     }
 
     #[test]

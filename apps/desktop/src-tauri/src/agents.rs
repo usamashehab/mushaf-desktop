@@ -6,12 +6,12 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use mushaf_ipc::{Request, Response, Session};
-use mushaf_protocol::AgentEvent;
+use mushaf_protocol::{AgentEvent, MUSHAF};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::sessions::{Action, AlertKind, Engine, Notice, Prefs, Saved, WindowState};
+use mushaf_engine::{Action, AlertKind, Engine, Notice, Prefs, Saved, WindowState};
 
 pub struct Agents {
     engine: Mutex<Engine>,
@@ -211,12 +211,12 @@ fn transcript_interrupted(agent: &str, session: &str, path: &str) -> bool {
 
 /// The tasks at work when the app last closed.
 fn load_saved() -> Vec<Saved> {
-    std::fs::read(mushaf_ipc::sessions_path()).ok().and_then(|body| serde_json::from_slice(&body).ok()).unwrap_or_default()
+    std::fs::read(mushaf_ipc::sessions_path(&MUSHAF)).ok().and_then(|body| serde_json::from_slice(&body).ok()).unwrap_or_default()
 }
 
 /// The events the hooks kept while the app wasn't running, taken once.
 fn take_missed() -> Vec<AgentEvent> {
-    let path = mushaf_ipc::missed_path();
+    let path = mushaf_ipc::missed_path(&MUSHAF);
     let Ok(body) = std::fs::read_to_string(&path) else { return vec![] };
     let _ = std::fs::remove_file(&path);
     body.lines().filter_map(|line| serde_json::from_str(line).ok()).collect()
@@ -224,7 +224,7 @@ fn take_missed() -> Vec<AgentEvent> {
 
 /// Keeps the tasks at work for the next start, through a temporary file.
 fn save(saved: &[Saved]) {
-    let path = mushaf_ipc::sessions_path();
+    let path = mushaf_ipc::sessions_path(&MUSHAF);
     let Ok(body) = serde_json::to_vec(saved) else { return };
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -238,7 +238,7 @@ fn save(saved: &[Saved]) {
 /// Starts the socket server and the once-a-second clock. A second app can't
 /// get here (single instance), so taking over a leftover socket is safe.
 pub fn start<R: Runtime>(app: &AppHandle<R>) {
-    match mushaf_ipc::listen() {
+    match mushaf_ipc::listen(&MUSHAF) {
         Ok(listener) => {
             let handle_app = app.clone();
             std::thread::spawn(move || mushaf_ipc::serve(listener, move |request| handle(&handle_app, request)));
@@ -251,7 +251,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
         let agents = tick_app.state::<Agents>();
         let prefs = agents.prefs.lock().unwrap().clone();
         let window = window_state(&tick_app);
-        let idle = crate::idle::idle_ms();
+        let idle = mushaf_engine::idle::idle_ms();
         let actions = agents.engine.lock().unwrap().on_tick(now_ms(), &prefs, window, idle, &transcript_interrupted);
         run(&tick_app, actions);
     });
@@ -267,14 +267,16 @@ pub fn cli_path() -> Option<PathBuf> {
 
 /// Tells `mushaf` (and the terminal plugin) where the app is.
 pub fn write_locator<R: Runtime>(app: &AppHandle<R>) {
-    let dir = mushaf_ipc::home_dir().join(".mushaf");
+    let path = mushaf_ipc::locator_path(&MUSHAF);
     let locator = serde_json::json!({
         "app": std::env::current_exe().ok(),
         "cli": cli_path(),
         "version": app.package_info().version.to_string(),
     });
-    let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(dir.join("locator.json"), serde_json::to_vec_pretty(&locator).unwrap_or_default());
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, serde_json::to_vec_pretty(&locator).unwrap_or_default());
 }
 
 #[derive(Serialize)]
@@ -316,15 +318,15 @@ pub struct Integration {
 fn integration(agent: &mushaf_agents::Agent, cli: Option<&PathBuf>) -> Integration {
     let home = mushaf_ipc::home_dir();
     let status = match cli {
-        Some(cli) => agent.status(&home, cli),
-        None => agent.status(&home, &PathBuf::from("mushaf")),
+        Some(cli) => agent.status(&home, cli, &MUSHAF),
+        None => agent.status(&home, &PathBuf::from("mushaf"), &MUSHAF),
     };
     Integration {
         id: agent.id,
         name: agent.name,
         status: status.as_ref().map(|s| s.as_str()).unwrap_or("error"),
         note: agent.note,
-        config_path: agent.config_path(&home).display().to_string(),
+        config_path: agent.config_path(&home, &MUSHAF).display().to_string(),
         error: status.err().map(|e| e.to_string()),
     }
 }
@@ -341,9 +343,9 @@ pub fn integrations_set(id: String, on: bool) -> Result<Integration, String> {
     let home = mushaf_ipc::home_dir();
     if on {
         let cli = cli_path().ok_or("the mushaf command is missing from this install")?;
-        agent.install(&home, &cli).map_err(|e| e.to_string())?;
+        agent.install(&home, &cli, &MUSHAF).map_err(|e| e.to_string())?;
     } else {
-        agent.uninstall(&home).map_err(|e| e.to_string())?;
+        agent.uninstall(&home, &MUSHAF).map_err(|e| e.to_string())?;
     }
     Ok(integration(&agent, cli_path().as_ref()))
 }
@@ -351,7 +353,7 @@ pub fn integrations_set(id: String, on: bool) -> Result<Integration, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sessions::Alert;
+    use mushaf_engine::Alert;
 
     fn alert(agent: &str, kind: AlertKind, project: &str) -> Alert {
         Alert { agent: agent.into(), project: Some(project.into()), kind, at: 0, worked_ms: None, banner: false, notify: true, sound: false }

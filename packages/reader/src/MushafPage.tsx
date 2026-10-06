@@ -28,7 +28,7 @@ export function usePageFont(data: ReaderData, platform: Platform, page: number):
   useEffect(() => {
     let isCurrent = true
     setReady(isFontReady(family))
-    loadFont(family, platform.pageFontUrl(data.manifest, page))
+    loadFont(family, platform.pageFont(data.manifest, page))
       .then(() => isCurrent && setReady(true))
       .catch(() => isCurrent && setReady(false))
 

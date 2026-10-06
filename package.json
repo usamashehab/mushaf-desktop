@@ -10,7 +10,7 @@
   "scripts": {
     "build-data": "node tools/build-data/src/build.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/core && tsc -p packages/packs && tsc -p packages/reader && tsc -p tools/build-data && tsc -p apps/desktop",
+    "typecheck": "tsc -p packages/core && tsc -p packages/packs && tsc -p packages/reader && tsc -p tools/build-data && tsc -p apps/desktop && tsc -p extensions/mushaf",
     "test:visual": "playwright test -c tests/visual",
     "dev": "pnpm --dir apps/desktop dev"
   },

@@ -1,0 +1,18 @@
+[package]
+name = "mushaf-engine"
+description = "When an app opens for the coding agents at work, and how it alerts: the rules, apart from windows and clocks, and the user's idle time."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mushaf-ipc.workspace = true
+mushaf-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+user-idle = "0.6"

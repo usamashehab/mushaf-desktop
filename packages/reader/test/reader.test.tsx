@@ -26,8 +26,8 @@ const platform = (): Platform & { saved: Settings[] } => {
 
   return {
     saved,
-    pageFontUrl: (_, page) => `/fonts/p${page}.woff2`,
-    extraFontUrl: (_, which) => `/fonts/${which}`,
+    pageFont: (_, page) => `/fonts/p${page}.woff2`,
+    extraFont: (_, which) => `/fonts/${which}`,
     loadSettings: async () => null,
     saveSettings: async settings => {
       saved.push(settings)
@@ -80,6 +80,39 @@ describe('the reader', () => {
     fireEvent.keyDown(window, { key: 'End' })
     fireEvent.keyDown(window, { key: 'ArrowLeft' })
     expect(shownPages()).toEqual([604])
+  })
+
+  test('says where it is: the last page in view, and whether it turned or went straight there', async () => {
+    const moves: [number, string][] = []
+    render(<Reader data={data} platform={platform()} settings={{ page: 50 }} onNavigate={(page, kind) => moves.push([page, kind])} />)
+    await waitFor(() => expect(shownPages()).toEqual([49, 50]))
+    await waitFor(() => expect(moves.at(-1)).toEqual([50, 'jump']))
+    fireEvent.keyDown(window, { key: 'ArrowLeft' })
+    await waitFor(() => expect(moves.at(-1)).toEqual([52, 'turn']))
+    fireEvent.keyDown(window, { key: 'End' })
+    await waitFor(() => expect(moves.at(-1)).toEqual([604, 'jump']))
+    fireEvent.keyDown(window, { key: 'ArrowRight' })
+    await waitFor(() => expect(moves.at(-1)).toEqual([602, 'turn']))
+    const input = await search('٥٠')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(moves.at(-1)).toEqual([50, 'jump']))
+  })
+
+  test('fonts can come as bytes, asked for only when not loaded yet', async () => {
+    const asked: number[] = []
+    const bytes: Platform = {
+      ...platform(),
+      pageFont: (_, page) => async () => {
+        asked.push(page)
+
+        return new ArrayBuffer(8)
+      },
+    }
+    render(<Reader data={data} platform={bytes} settings={{ page: 300, spread: 'single' }} />)
+    await waitFor(() => expect(shownPages()).toEqual([300]))
+    await waitFor(() => expect(asked).toContain(300))
+    expect(asked.filter(page => page === 300)).toHaveLength(1)
+    expect(asked).toEqual(expect.arrayContaining([301, 299, 302]))
   })
 
   const search = async (text: string) => {

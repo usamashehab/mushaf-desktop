@@ -44,8 +44,8 @@ const agents: AgentsBridge = {
 
 /** The reader in the desktop app: fonts from the app's data folder, settings in its config folder. */
 export const tauriPlatform: Platform = {
-  pageFontUrl: (pack, page) => `${FONTS}/${pageFontPath(pack, page)}`,
-  extraFontUrl: (pack, which) => `${FONTS}/${extraFontPath(pack, which)}`,
+  pageFont: (pack, page) => `${FONTS}/${pageFontPath(pack, page)}`,
+  extraFont: (pack, which) => `${FONTS}/${extraFontPath(pack, which)}`,
   loadSettings: () => invoke<unknown>('load_settings'),
   saveSettings: (settings: Settings) => invoke('save_settings', { settings }),
   agents,

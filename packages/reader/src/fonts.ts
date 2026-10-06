@@ -1,6 +1,8 @@
 // Page fonts load on demand through the FontFace API. A page font is ~150 KB, so
 // only the pages around the one in view stay loaded; older ones are dropped.
 
+import type { FontSource } from './platform.ts'
+
 const KEEP = 24
 
 const loading = new Map<string, Promise<FontFace>>()
@@ -24,11 +26,15 @@ function touch(family: string) {
   }
 }
 
-/** Loads `url` as the font `family`, once; resolves when text can be drawn with it. */
-export function loadFont(family: string, url: string, keep = false): Promise<FontFace> {
+/** Loads `source` as the font `family`, once; resolves when text can be drawn with it. */
+export function loadFont(family: string, source: FontSource, keep = false): Promise<FontFace> {
   let face = loading.get(family)
   if (!face) {
-    face = new FontFace(family, `url("${url}")`, { display: 'block' }).load().then(loaded => {
+    const made =
+      typeof source === 'string'
+        ? Promise.resolve(new FontFace(family, `url("${source}")`, { display: 'block' }))
+        : source().then(bytes => new FontFace(family, bytes, { display: 'block' }))
+    face = made.then(font => font.load()).then(loaded => {
       document.fonts.add(loaded)
       ready.add(family)
 

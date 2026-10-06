@@ -1,12 +1,13 @@
-//! The local socket the `mushaf` command and the app talk over: a Unix socket in
-//! a folder only the user can open, or a named pipe on Windows. One request per
-//! connection, as one line of JSON, answered by one line of JSON.
+//! The local socket an app's hook command and the app talk over: a Unix socket
+//! in a folder only the user can open, or a named pipe on Windows. One request
+//! per connection, as one line of JSON, answered by one line of JSON. Each app
+//! ([`AppId`]) has its own socket and its own folder in the home folder.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 
 use interprocess::local_socket::{prelude::*, Listener, ListenerOptions, Name, Stream};
-use mushaf_protocol::AgentEvent;
+use mushaf_protocol::{AgentEvent, AppId};
 use serde::{Deserialize, Serialize};
 
 /// A request longer than this is not ours.
@@ -17,7 +18,7 @@ const MAX_LINE: u64 = 64 * 1024;
 pub enum Request {
     /// An agent's hook fired.
     Event(AgentEvent),
-    /// Show the Mushaf, at a place when one is given ("50", "2:255", "البقرة").
+    /// Show the app, at a place when one is given (for the Mushaf: "50", "2:255", "البقرة").
     Open {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         place: Option<String>,
@@ -34,7 +35,7 @@ pub struct Session {
     pub project: Option<String>,
     /// ms since the epoch.
     pub started_at: u64,
-    /// When the Mushaf opens for it, if it will.
+    /// When the app opens for it, if it will.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opens_at: Option<u64>,
     pub opened: bool,
@@ -73,22 +74,25 @@ impl Response {
     }
 }
 
-/// Where the socket lives. `MUSHAF_SOCKET` overrides it (tests, several users' dev builds).
-pub fn socket_path() -> PathBuf {
-    if let Some(path) = std::env::var_os("MUSHAF_SOCKET") {
+/// Where the app's socket lives. `<ENV>_SOCKET` (`MUSHAF_SOCKET`) overrides it
+/// (tests, several users' dev builds).
+pub fn socket_path(app: &AppId) -> PathBuf {
+    if let Some(path) = std::env::var_os(app.env_var("SOCKET")) {
         return PathBuf::from(path);
     }
+    let slug = app.slug;
     #[cfg(windows)]
     {
         let user = std::env::var("USERNAME").unwrap_or_else(|_| "user".into());
         let user: String = user.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
-        PathBuf::from(format!(r"\\.\pipe\mushaf-{user}"))
+        PathBuf::from(format!(r"\\.\pipe\{slug}-{user}"))
     }
     #[cfg(not(windows))]
     {
+        let file = format!("{slug}.sock");
         match std::env::var_os("XDG_RUNTIME_DIR").filter(|dir| !dir.is_empty()) {
-            Some(dir) => PathBuf::from(dir).join("mushaf").join("mushaf.sock"),
-            None => home_dir().join(".mushaf").join("run").join("mushaf.sock"),
+            Some(dir) => PathBuf::from(dir).join(slug).join(file),
+            None => app_dir(app).join("run").join(file),
         }
     }
 }
@@ -99,16 +103,26 @@ pub fn home_dir() -> PathBuf {
     std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// The app's folder in the home folder: `~/.mushaf`.
+pub fn app_dir(app: &AppId) -> PathBuf {
+    home_dir().join(format!(".{}", app.slug))
+}
+
 /// Where the hooks keep the events the app missed while it wasn't running (a
 /// task finishing, a session ending), one JSON event a line, for the app to
 /// take when it starts.
-pub fn missed_path() -> PathBuf {
-    home_dir().join(".mushaf").join("missed.jsonl")
+pub fn missed_path(app: &AppId) -> PathBuf {
+    app_dir(app).join("missed.jsonl")
 }
 
 /// Where the app keeps the tasks at work, to know them again after a restart.
-pub fn sessions_path() -> PathBuf {
-    home_dir().join(".mushaf").join("sessions.json")
+pub fn sessions_path(app: &AppId) -> PathBuf {
+    app_dir(app).join("sessions.json")
+}
+
+/// Where the app says where its program is, for the hook command to start it.
+pub fn locator_path(app: &AppId) -> PathBuf {
+    app_dir(app).join("locator.json")
 }
 
 fn name(path: &std::path::Path) -> io::Result<Name<'_>> {
@@ -127,8 +141,8 @@ fn name(path: &std::path::Path) -> io::Result<Name<'_>> {
 
 /// Sends one request and waits for the answer. Fails fast when nothing listens.
 /// Callers that must not hang bound the whole call themselves (the CLI exits on a timer).
-pub fn send(request: &Request) -> io::Result<Response> {
-    let path = socket_path();
+pub fn send(app: &AppId, request: &Request) -> io::Result<Response> {
+    let path = socket_path(app);
     let mut stream = Stream::connect(name(&path)?)?;
     let mut line = serde_json::to_vec(request)?;
     line.push(b'\n');
@@ -141,8 +155,8 @@ pub fn send(request: &Request) -> io::Result<Response> {
 
 /// Starts listening, taking over a socket a crashed app left behind.
 /// The socket's folder is made private to the user first.
-pub fn listen() -> io::Result<Listener> {
-    let path = socket_path();
+pub fn listen(app: &AppId) -> io::Result<Listener> {
+    let path = socket_path(app);
     #[cfg(unix)]
     if let Some(dir) = path.parent() {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -183,7 +197,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mushaf_protocol::Kind;
+    use mushaf_protocol::{Kind, MUSHAF};
 
     #[test]
     fn requests_round_trip_over_the_socket() {
@@ -193,9 +207,9 @@ mod tests {
         #[cfg(windows)]
         std::env::set_var("MUSHAF_SOCKET", format!(r"\\.\pipe\mushaf-test-{}", std::process::id()));
 
-        assert!(send(&Request::Status).is_err(), "nothing listens yet");
+        assert!(send(&MUSHAF, &Request::Status).is_err(), "nothing listens yet");
 
-        let listener = listen().unwrap();
+        let listener = listen(&MUSHAF).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -211,9 +225,20 @@ mod tests {
         });
 
         let event = AgentEvent { v: 1, agent: "claude".into(), session: "s".into(), kind: Kind::Started, project: None, transcript: None, at: 1 };
-        assert!(send(&Request::Event(event)).unwrap().ok);
-        assert!(send(&Request::Open { place: Some("2:255".into()) }).unwrap().ok);
-        assert_eq!(send(&Request::Status).unwrap().sessions, Some(vec![]));
+        assert!(send(&MUSHAF, &Request::Event(event)).unwrap().ok);
+        assert!(send(&MUSHAF, &Request::Open { place: Some("2:255".into()) }).unwrap().ok);
+        assert_eq!(send(&MUSHAF, &Request::Status).unwrap().sessions, Some(vec![]));
+    }
+
+    #[test]
+    fn each_app_has_its_own_socket_and_folder() {
+        let other = AppId { slug: "goals", program: "goals-desktop", title: "Goals", env: "GOALS" };
+        assert_ne!(socket_path(&MUSHAF), socket_path(&other));
+        assert!(app_dir(&MUSHAF).ends_with(".mushaf"));
+        assert!(missed_path(&other).ends_with(".goals/missed.jsonl"));
+        assert!(sessions_path(&MUSHAF).ends_with(".mushaf/sessions.json"));
+        #[cfg(not(windows))]
+        assert!(socket_path(&other).ends_with("goals/goals.sock") || socket_path(&other).ends_with("run/goals.sock"));
     }
 
     #[test]

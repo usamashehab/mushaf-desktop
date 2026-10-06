@@ -8,6 +8,38 @@ use serde_json::Value;
 
 pub const VERSION: u8 = 1;
 
+/// Which app the hooks, the socket and the files belong to. Two apps built on
+/// these crates live side by side on one machine: each knows only its own hooks
+/// in an agent's settings, and listens on its own socket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AppId {
+    /// The hook program's file name without `.exe`, and the word in our file,
+    /// folder, socket and hook names: `mushaf`.
+    pub slug: &'static str,
+    /// The app's own program, next to the hook program: `mushaf-desktop`.
+    pub program: &'static str,
+    /// How a sentence names the app: `the Mushaf`.
+    pub title: &'static str,
+    /// Prefix of the environment variables that override where things are:
+    /// `MUSHAF` reads `MUSHAF_SOCKET` and `MUSHAF_APP`.
+    pub env: &'static str,
+}
+
+pub const MUSHAF: AppId = AppId { slug: "mushaf", program: "mushaf-desktop", title: "the Mushaf", env: "MUSHAF" };
+
+impl AppId {
+    /// The title at the start of a sentence: `The Mushaf`.
+    pub fn title_case(&self) -> String {
+        let mut chars = self.title.chars();
+        chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+    }
+
+    /// The name of one of the app's environment variables: `MUSHAF_SOCKET`.
+    pub fn env_var(&self, name: &str) -> String {
+        format!("{}_{name}", self.env)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {

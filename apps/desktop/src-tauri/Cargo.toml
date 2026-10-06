@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 mushaf-agents.workspace = true
+mushaf-engine.workspace = true
 mushaf-ipc.workspace = true
 mushaf-protocol.workspace = true
 futures-util = "0.3"
@@ -31,12 +32,6 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["fs", "time"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-zbus = "5"
-
-[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
-user-idle = "0.6"
 
 [dev-dependencies]
 tempfile = "3"

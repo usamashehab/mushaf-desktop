@@ -6,16 +6,25 @@ import type { PackManifest } from '@mushaf/packs'
  * phone. The reader itself touches no file system, network or native API.
  */
 export interface Platform {
-  /** A URL the page's font loads from: a local file in the app, a dev server path in a browser. */
-  pageFontUrl(pack: PackManifest, page: number): string
+  /** Where the page's font comes from: a local file in the app, a dev server path in a browser. */
+  pageFont(pack: PackManifest, page: number): FontSource
   /** The same for the surah-name and basmala fonts. */
-  extraFontUrl(pack: PackManifest, which: keyof PackManifest['extras']): string
+  extraFont(pack: PackManifest, which: keyof PackManifest['extras']): FontSource
   /** Settings as last saved, in any shape; the reader migrates them. */
   loadSettings(): Promise<unknown>
   saveSettings(settings: Settings): Promise<void>
   /** The coding agents, where the platform has them. */
   agents?: AgentsBridge
 }
+
+/**
+ * A font: the URL it loads from, or, where the reader can't fetch (a sandboxed
+ * frame), a function giving its bytes. The function runs only when the font isn't loaded yet.
+ */
+export type FontSource = string | (() => Promise<ArrayBuffer>)
+
+/** How the reader got to a page: turning to the next or previous one, or going straight there. */
+export type MoveKind = 'turn' | 'jump'
 
 /** The data a reader draws from. */
 export interface ReaderData {

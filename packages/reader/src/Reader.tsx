@@ -23,7 +23,7 @@ import { loadFont } from './fonts.ts'
 import { fitFontSize, prefersSpread } from './geometry.ts'
 import { stringsFor } from './i18n.ts'
 import { MushafPage, SURAH_NAMES_FAMILY } from './MushafPage.tsx'
-import type { Platform, ReaderData } from './platform.ts'
+import type { MoveKind, Platform, ReaderData } from './platform.ts'
 import { SearchBox } from './SearchBox.tsx'
 import { SidePanel, type PanelTab } from './SidePanel.tsx'
 
@@ -61,10 +61,16 @@ export interface ReaderProps {
   openAt?: { page: number; ayah?: AyahRef } | undefined
   /** Shown above the pages: an agent's "finished" banner, for one. */
   banner?: ReactNode
+  /**
+   * Called with the last page in view each time it changes, and once at the
+   * start (as a jump): whether the reader turned to it or went straight there
+   * (search, the index, a bookmark, the slider, Home and End).
+   */
+  onNavigate?: (page: number, kind: MoveKind) => void
 }
 
 /** The whole reader: pages, turning, search and go to, the index, bookmarks, themes and zoom. */
-export function Reader({ data, platform, settings: stored, openAt, banner }: ReaderProps) {
+export function Reader({ data, platform, settings: stored, openAt, banner, onNavigate }: ReaderProps) {
   const [settings, setSettings] = useState<Settings>(() => migrateSettings(stored))
   const [active, setActive] = useState<AyahRef>()
   const [picked, setPicked] = useState<Picked>()
@@ -85,8 +91,12 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
     setTimeout(() => setToasts(current => current.filter(one => one.id !== id)), action ? 6000 : 2600)
   }, [])
 
+  // How the reader got to the page in view, for `onNavigate`.
+  const move = useRef<MoveKind>('jump')
+
   const open = useCallback(
     (page: number, ayah?: AyahRef) => {
+      move.current = 'jump'
       setPage(page)
       setActive(ayah ? { surah: ayah.surah, ayah: ayah.ayah } : undefined)
       setPicked(undefined)
@@ -122,7 +132,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
   }, [platform, settings])
 
   useEffect(() => {
-    void loadFont(SURAH_NAMES_FAMILY, platform.extraFontUrl(data.manifest, 'surahNames'), true).catch(() => {})
+    void loadFont(SURAH_NAMES_FAMILY, platform.extraFont(data.manifest, 'surahNames'), true).catch(() => {})
   }, [platform, data.manifest])
 
   useEffect(() => {
@@ -136,15 +146,24 @@ export function Reader({ data, platform, settings: stored, openAt, banner }: Rea
   const pages = isSpread ? spreadOf(settings.page) : [settings.page]
   const fontSize = fitFontSize({ width: view.width - 96, height: view.height - 8, lineEm, pages: isSpread ? 2 : 1, zoom: settings.zoom })
 
+  // Tell where the reader is: the last page in view, once per page.
+  const lastInView = Math.max(...pages)
+  const latest = useRef({ onNavigate, lastInView })
+  latest.current = { onNavigate, lastInView }
+  useEffect(() => {
+    latest.current.onNavigate?.(latest.current.lastInView, move.current)
+  }, [settings.page])
+
   // Fetch the fonts of the pages either side, so turning shows a drawn page at once.
   useEffect(() => {
     for (const near of [1, 2, -1, -2, 3, -3]) {
       const page = clampPage(settings.page + near)
-      void loadFont(`${data.manifest.fonts.familyPrefix}${page}`, platform.pageFontUrl(data.manifest, page)).catch(() => {})
+      void loadFont(`${data.manifest.fonts.familyPrefix}${page}`, platform.pageFont(data.manifest, page)).catch(() => {})
     }
   }, [settings.page, data.manifest, platform])
 
   const go = (by: number) => {
+    move.current = 'turn'
     setActive(undefined)
     setPicked(undefined)
     update(current => ({ ...current, page: turn(current.page, by, isSpread) }))
