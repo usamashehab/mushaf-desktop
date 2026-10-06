@@ -2222,7 +2222,7 @@ dependencies = [
 
 [[package]]
 name = "mushaf-agents"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "mushaf-protocol",
  "serde_json",
@@ -2232,7 +2232,7 @@ dependencies = [
 
 [[package]]
 name = "mushaf-cli"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "mushaf-agents",
  "mushaf-ipc",
@@ -2242,7 +2242,7 @@ dependencies = [
 
 [[package]]
 name = "mushaf-desktop"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "futures-util",
@@ -2264,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "mushaf-engine"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "mushaf-ipc",
  "mushaf-protocol",
@@ -2276,7 +2276,7 @@ dependencies = [
 
 [[package]]
 name = "mushaf-ipc"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "interprocess",
  "mushaf-protocol",
@@ -2287,7 +2287,7 @@ dependencies = [
 
 [[package]]
 name = "mushaf-protocol"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
