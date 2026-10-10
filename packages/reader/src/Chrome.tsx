@@ -21,7 +21,7 @@ function ayahText(words: string[], surahName: string, ayah: string) {
 }
 
 /** What can be done with a clicked ayah: bookmark it, copy it. */
-export function AyahMenu({ picked, onClose }: { picked: Picked; onClose: () => void }) {
+export function AyahMenu({ picked, onClose, onCopied }: { picked: Picked; onClose: () => void; onCopied: () => void }) {
   const { data, settings, update, t, n, surahName, toast } = useReader()
   const menu = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState({ left: picked.x, top: picked.y + 14 })
@@ -62,7 +62,7 @@ export function AyahMenu({ picked, onClose }: { picked: Picked; onClose: () => v
     } catch {
       // No clipboard access; nothing to undo.
     }
-    onClose()
+    onCopied()
   }
 
   return (

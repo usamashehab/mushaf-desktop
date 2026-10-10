@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
 import {
   bookmarksOn,
@@ -50,6 +50,75 @@ function useSize<T extends HTMLElement>() {
   }, [])
 
   return [ref, size] as const
+}
+
+/** px a press travels before it is a drag, and a sideways drag before it turns the page. */
+const DRAG_PX = 8
+const SWIPE_PX = 48
+
+/**
+ * A press dragged sideways turns the page, by how far it went (`onSwipe(dx)`);
+ * dragged up or down it selects text as before. `dragged` tells the click that ends
+ * a drag from a click.
+ */
+function useSwipe(onSwipe: (dx: number) => void) {
+  const dragged = useRef(false)
+  const latest = useRef(onSwipe)
+  latest.current = onSwipe
+  const stop = useRef<() => void>(undefined)
+  useEffect(() => () => stop.current?.(), [])
+
+  const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    stop.current?.()
+    dragged.current = false
+    if (event.button !== 0 || (event.target as Element).closest('button, input, select, a')) {
+      return
+    }
+    const view = event.currentTarget
+    const startX = event.clientX
+    const startY = event.clientY
+    let sideways: boolean | undefined
+    const move = (e: PointerEvent) => {
+      const dx = e.clientX - startX
+      const dy = e.clientY - startY
+      if (sideways === undefined) {
+        if (Math.hypot(dx, dy) < DRAG_PX) {
+          return
+        }
+        dragged.current = true
+        sideways = Math.abs(dx) > Math.abs(dy)
+        view.classList.toggle('is-swiping', sideways)
+      }
+      if (sideways) {
+        window.getSelection()?.removeAllRanges()
+      }
+    }
+    // Swiping, the browser should not go on growing a selection.
+    const hold = (e: MouseEvent) => sideways && e.preventDefault()
+    const up = (e: PointerEvent) => {
+      end()
+      const dx = e.clientX - startX
+      if (sideways && Math.abs(dx) >= SWIPE_PX) {
+        window.getSelection()?.removeAllRanges()
+        latest.current(dx)
+      }
+    }
+    const end = () => {
+      view.classList.remove('is-swiping')
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('mousemove', hold)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', end)
+      stop.current = undefined
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('mousemove', hold)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', end)
+    stop.current = end
+  }, [])
+
+  return { onPointerDown, dragged }
 }
 
 export interface ReaderProps {
@@ -169,6 +238,13 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
     update(current => ({ ...current, page: turn(current.page, by, isSpread) }))
   }
 
+  const unpick = () => {
+    setActive(undefined)
+    setPicked(undefined)
+  }
+  // Dragged rightward, the left page turns over to the right: the next page, as a Mushaf turns.
+  const swipe = useSwipe(dx => go(dx > 0 ? 1 : -1))
+
   const here = { page: active ? (data.meta.ayahPages[active.surah - 1]?.[active.ayah - 1] ?? settings.page) : settings.page, ayah: active }
   const isBookmarked = findBookmark(settings, here.page, here.ayah) !== undefined
   const toggleHere = () => {
@@ -218,8 +294,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
         i: () => togglePanel('surahs'),
         m: () => togglePanel('bookmarks'),
         Escape: () => {
-          setPicked(undefined)
-          setActive(undefined)
+          unpick()
           setPanel(undefined)
         },
       }
@@ -312,7 +387,23 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
               onPause={pause}
             />
           ) : null}
-          <main className="view" ref={viewRef}>
+          <main
+            className="view"
+            ref={viewRef}
+            onPointerDown={swipe.onPointerDown}
+            onClickCapture={event => {
+              // The click that ends a drag is not a click on what it ends over.
+              if (swipe.dragged.current) {
+                event.stopPropagation()
+              }
+            }}
+            onClick={event => {
+              // A click off the book lets go of the picked ayah.
+              if (!(event.target as Element).closest('.book')) {
+                unpick()
+              }
+            }}
+          >
             <button type="button" className="turn turn-next" onClick={() => go(1)} aria-label={t.next} title={`${t.next} (←)`}>
               <ChevronLeft size={28} />
             </button>
@@ -334,6 +425,12 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
                       active={active}
                       bookmarks={bookmarksOn(settings, [page])}
                       onPickAyah={(ayah, x, y) => {
+                        // A second click on the picked ayah lets it go.
+                        if (active?.surah === ayah.surah && active.ayah === ayah.ayah) {
+                          unpick()
+
+                          return
+                        }
                         setActive(ayah)
                         setPicked({ ayah, page, x, y })
                       }}
@@ -346,7 +443,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
           </main>
         </div>
         <PageSlider page={settings.page} onPage={page => open(page)} />
-        {picked ? <AyahMenu picked={picked} onClose={() => setPicked(undefined)} /> : null}
+        {picked ? <AyahMenu picked={picked} onClose={() => setPicked(undefined)} onCopied={unpick} /> : null}
         <Toasts toasts={toasts} onDone={id => setToasts(current => current.filter(one => one.id !== id))} />
       </div>
     </ReaderContext.Provider>

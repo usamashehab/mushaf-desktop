@@ -25,7 +25,10 @@ class FakeResizeObserver {
   disconnect() {}
 }
 
-Object.assign(globalThis, { FontFace: FakeFontFace, ResizeObserver: FakeResizeObserver })
+// jsdom has no PointerEvent either; a mouse event carries what the reader reads of one.
+class FakePointerEvent extends MouseEvent {}
+
+Object.assign(globalThis, { FontFace: FakeFontFace, ResizeObserver: FakeResizeObserver, PointerEvent: globalThis.PointerEvent ?? FakePointerEvent })
 Object.defineProperty(document, 'fonts', { value: { add() {}, delete() {}, check: () => true } })
 
 // The book turns its pages only when motion is welcome; the tests read the page reached.

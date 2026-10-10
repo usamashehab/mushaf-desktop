@@ -42,7 +42,7 @@ describe('page geometry', () => {
     const tall = fitFontSize({ width: 600, height: 4000, lineEm, pages: 1, zoom: 1 })
     const wide = fitFontSize({ width: 4000, height: 800, lineEm, pages: 1, zoom: 1 })
     // The page, its margins and the cover either side, beside the page edges' 12px.
-    expect(tall).toBeCloseTo((600 - 24) / (lineEm * 1.07 + 3.2 + 1.5), 1)
+    expect(tall).toBeCloseTo((600 - 24) / (lineEm * 1.18 + 4.2 + 1.5), 1)
     expect(wide).toBeLessThan(800 / 30)
     expect(fitFontSize({ width: 600, height: 4000, lineEm, pages: 1, zoom: 1.5 })).toBeCloseTo(tall * 1.5, 0)
   })
@@ -132,6 +132,59 @@ describe('the reader', () => {
     const picked = [...document.querySelectorAll<HTMLElement>('.mushaf-word.is-active')]
     expect(new Set(picked.map(word => word.dataset['ayah']))).toEqual(new Set(['2:255']))
     expect(picked.at(-1)?.dataset['text']).toBe('٢٥٥')
+  })
+
+  const activeAyahs = () => new Set([...document.querySelectorAll<HTMLElement>('.mushaf-word.is-active')].map(word => word.dataset['ayah']))
+  const wordOf = (ayah: string) =>
+    waitFor(() => {
+      const word = document.querySelector<HTMLElement>(`.mushaf-word[data-ayah="${ayah}"]`)
+      if (!word) {
+        throw new Error(`no word of ${ayah}`)
+      }
+
+      return word
+    })
+
+  test('a click picks an ayah; a second click, or one off the book, lets it go', async () => {
+    render(<Reader data={data} platform={platform()} settings={{ page: 50, spread: 'single' }} />)
+    const word = await wordOf('3:5')
+    fireEvent.click(word)
+    expect(activeAyahs()).toEqual(new Set(['3:5']))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.click(word)
+    expect(activeAyahs()).toEqual(new Set())
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    fireEvent.click(word)
+    fireEvent.click(document.querySelector('.view')!)
+    expect(activeAyahs()).toEqual(new Set())
+  })
+
+  test('copying the ayah lets it go', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    render(<Reader data={data} platform={platform()} settings={{ page: 50, spread: 'single' }} />)
+    fireEvent.click(await wordOf('3:5'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /انسخ الآية/ }))
+    await waitFor(() => expect(writeText).toHaveBeenCalled())
+    expect(activeAyahs()).toEqual(new Set())
+  })
+
+  test('a sideways drag turns the page, rightward to the next, and picks no ayah', async () => {
+    render(<Reader data={data} platform={platform()} settings={{ page: 50, spread: 'single' }} />)
+    const drag = (target: HTMLElement, dx: number, dy = 0) => {
+      fireEvent.pointerDown(target, { button: 0, clientX: 500, clientY: 400 })
+      fireEvent.pointerMove(window, { clientX: 500 + dx, clientY: 400 + dy })
+      fireEvent.pointerUp(window, { clientX: 500 + dx, clientY: 400 + dy })
+      fireEvent.click(target)
+    }
+    drag(await wordOf('3:5'), 120)
+    expect(shownPages()).toEqual([51])
+    expect(activeAyahs()).toEqual(new Set())
+    drag(document.querySelector<HTMLElement>('.mushaf-word')!, -120)
+    expect(shownPages()).toEqual([50])
+    drag(await wordOf('3:5'), 10, 120)
+    expect(shownPages()).toEqual([50])
+    expect(activeAyahs()).toEqual(new Set())
   })
 
   test('words search the ayahs, and a result opens its page', async () => {

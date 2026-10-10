@@ -824,6 +824,13 @@
   padding: 4px 48px;
 }
 
+/* Dragged sideways, the page turns: no text is picked up on the way. */
+.view.is-swiping {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ───────────── The book ───────────── */
 
 /* A leather cover with a tooled gold border, the pages laid open on it. */
