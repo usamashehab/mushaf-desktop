@@ -1,6 +1,6 @@
 {
   "name": "@mushaf/extension",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "The Mushaf as an extension of another app: the reader in one HTML file, its fonts fetched by the app.",
   "type": "module",

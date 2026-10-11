@@ -15,7 +15,7 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
 - [For AI assistants](#for-ai-assistants)
 - [Development](#development)
 
-> **Status: early development (0.3.0).** Tested by hand on Linux (Ubuntu, GNOME, X11).
+> **Status: early development (0.3.1).** Tested by hand on Linux (Ubuntu, GNOME, X11).
 > The Windows and macOS installers are built from the same code but not yet tested by hand.
 > For a Mushaf inside the Claude Code terminal, see
 > [claude-quran](https://github.com/usamashehab/claude-quran).
@@ -27,16 +27,16 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
 
    | Computer | File |
    | --- | --- |
-   | Linux: Ubuntu, Debian, Mint | `Mushaf_0.3.0_amd64.deb` |
-   | Linux: Fedora, openSUSE | `Mushaf-0.3.0-1.x86_64.rpm` |
-   | Windows 10 or 11 | `Mushaf_0.3.0_x64-setup.exe` |
-   | Mac with Apple silicon (M1 or later) | `Mushaf_0.3.0_aarch64.dmg` |
+   | Linux: Ubuntu, Debian, Mint | `Mushaf_0.3.1_amd64.deb` |
+   | Linux: Fedora, openSUSE | `Mushaf-0.3.1-1.x86_64.rpm` |
+   | Windows 10 or 11 | `Mushaf_0.3.1_x64-setup.exe` |
+   | Mac with Apple silicon (M1 or later) | `Mushaf_0.3.1_aarch64.dmg` |
 
 2. Install it:
 
    - **Ubuntu, Debian:** double-click the file, or in a terminal, in the folder you saved it to:
-     `sudo apt install ./Mushaf_0.3.0_amd64.deb`
-   - **Fedora:** `sudo dnf install ./Mushaf-0.3.0-1.x86_64.rpm`
+     `sudo apt install ./Mushaf_0.3.1_amd64.deb`
+   - **Fedora:** `sudo dnf install ./Mushaf-0.3.1-1.x86_64.rpm`
    - **Windows:** run the file. The installer isn't signed, so Windows may show
      "Windows protected your PC": choose **More info**, then **Run anyway**.
    - **Mac:** open the `.dmg` and drag **Mushaf** to Applications. The app isn't notarized
@@ -149,8 +149,10 @@ Settings are saved in `~/.config/app.mushaf.desktop/settings.json` on Linux.
 
 The pages sit in an open book: going to the next or the previous page turns the leaf
 over, as a Mushaf turns; jumping further shows the new place at once, and with reduced
-motion set on your computer the pages change without turning. Click an ayah for its menu
-(bookmark, copy). Type in the search box to search the
+motion set on your computer the pages change without turning. Drag a page sideways to
+turn it: rightward for the next page, leftward for the one before; drag up or down to
+select text. Click an ayah for its menu (bookmark, copy); click it again, or anywhere off
+the book, to let it go. Type in the search box to search the
 Quran's text, or to go somewhere: `50` (a page), `2:255` (an ayah), `البقرة` or
 `Al-Baqarah` (a surah).
 
@@ -263,7 +265,7 @@ agents in the app's Settings; the `mushaf` command isn't on the `PATH` there.
    once and choose **Trust all and continue**. If OpenCode or DeepSeek TUI is connected,
    tell the user to restart any session of it that is open.
 5. Open the app once so it downloads its fonts: `mushaf open`. Check: `mushaf status`
-   prints `The Mushaf app 0.3.0 is running.`
+   prints `The Mushaf app 0.3.1 is running.`
 6. Verify the connection with a short task in each agent (for example, ask it to reply
    "ok"), then run `mushaf status`. It must show `Last heard from Claude: ...` (or the
    agent's name) from a few seconds ago.
@@ -309,7 +311,7 @@ cd mushaf-desktop
 corepack enable    # turns on pnpm, the package manager this repo uses
 pnpm install
 pnpm --dir apps/desktop exec tauri build --bundles deb
-sudo apt install ./target/release/bundle/deb/Mushaf_0.3.0_amd64.deb
+sudo apt install ./target/release/bundle/deb/Mushaf_0.3.1_amd64.deb
 ```
 
 On Windows and macOS, follow Tauri's [prerequisites](https://v2.tauri.app/start/prerequisites/)
