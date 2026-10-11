@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 
 import {
   bookmarksOn,
@@ -119,6 +119,55 @@ function useSwipe(onSwipe: (dx: number) => void) {
   }, [])
 
   return { onPointerDown, dragged }
+}
+
+/** Sideways wheel travel, in px, that turns the page; and the pause that ends a gesture. */
+const WHEEL_PX = 60
+const WHEEL_REST_MS = 250
+
+/**
+ * A sideways swipe of two fingers on a touchpad turns the page, once a gesture:
+ * the scrolling that coasts on after it does not turn another. The wheel scrolls
+ * as before when the page is zoomed wider than the view.
+ */
+function useWheelSwipe(target: RefObject<HTMLElement | null>, onSwipe: (dx: number) => void) {
+  const latest = useRef(onSwipe)
+  latest.current = onSwipe
+  useEffect(() => {
+    const element = target.current
+    if (!element) {
+      return
+    }
+    let travel = 0
+    let turned = false
+    let rest: ReturnType<typeof setTimeout> | undefined
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY) || element.scrollWidth > element.clientWidth) {
+        return
+      }
+      event.preventDefault()
+      clearTimeout(rest)
+      rest = setTimeout(() => {
+        travel = 0
+        turned = false
+      }, WHEEL_REST_MS)
+      if (turned) {
+        return
+      }
+      travel += event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaX * 16 : event.deltaX
+      if (Math.abs(travel) >= WHEEL_PX) {
+        turned = true
+        // Fingers moving right scroll leftward (deltaX < 0), as dragging the page right does.
+        latest.current(-travel)
+      }
+    }
+    element.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => {
+      clearTimeout(rest)
+      element.removeEventListener('wheel', onWheel)
+    }
+  }, [target])
 }
 
 export interface ReaderProps {
@@ -244,6 +293,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
   }
   // Dragged rightward, the left page turns over to the right: the next page, as a Mushaf turns.
   const swipe = useSwipe(dx => go(dx > 0 ? 1 : -1))
+  useWheelSwipe(viewRef, dx => go(dx > 0 ? 1 : -1))
 
   const here = { page: active ? (data.meta.ayahPages[active.surah - 1]?.[active.ayah - 1] ?? settings.page) : settings.page, ayah: active }
   const isBookmarked = findBookmark(settings, here.page, here.ayah) !== undefined

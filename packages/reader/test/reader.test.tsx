@@ -187,6 +187,26 @@ describe('the reader', () => {
     expect(activeAyahs()).toEqual(new Set())
   })
 
+  test('a two-finger swipe turns one page a gesture, fingers rightward to the next', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<Reader data={data} platform={platform()} settings={{ page: 50, spread: 'single' }} />)
+      await waitFor(() => expect(shownPages()).toEqual([50]))
+      const view = document.querySelector('.view')!
+      fireEvent.wheel(view, { deltaX: -40 })
+      fireEvent.wheel(view, { deltaX: -40 })
+      fireEvent.wheel(view, { deltaX: -40 })
+      expect(shownPages()).toEqual([51])
+      act(() => vi.advanceTimersByTime(300))
+      fireEvent.wheel(view, { deltaX: 80 })
+      expect(shownPages()).toEqual([50])
+      fireEvent.wheel(view, { deltaY: 80, deltaX: 20 })
+      expect(shownPages()).toEqual([50])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('words search the ayahs, and a result opens its page', async () => {
     render(<Reader data={data} platform={platform()} settings={{ spread: 'single' }} />)
     await search('لا تأخذه سنة ولا نوم')

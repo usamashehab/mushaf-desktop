@@ -149,9 +149,9 @@ Settings are saved in `~/.config/app.mushaf.desktop/settings.json` on Linux.
 
 The pages sit in an open book: going to the next or the previous page turns the leaf
 over, as a Mushaf turns; jumping further shows the new place at once, and with reduced
-motion set on your computer the pages change without turning. Drag a page sideways to
-turn it: rightward for the next page, leftward for the one before; drag up or down to
-select text. Click an ayah for its menu (bookmark, copy); click it again, or anywhere off
+motion set on your computer the pages change without turning. Drag a page sideways, or
+swipe two fingers sideways on a touchpad, to turn it: rightward for the next page,
+leftward for the one before; drag up or down to select text. Click an ayah for its menu (bookmark, copy); click it again, or anywhere off
 the book, to let it go. Type in the search box to search the
 Quran's text, or to go somewhere: `50` (a page), `2:255` (an ayah), `البقرة` or
 `Al-Baqarah` (a surah).
