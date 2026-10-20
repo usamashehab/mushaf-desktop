@@ -6,7 +6,17 @@ import type { PackManifest } from '@mushaf/packs'
 
 import { fitFontSize, prefersSpread } from '../src/geometry.ts'
 import { surahNameGlyphs } from '../src/MushafPage.tsx'
-import { Reader, type AgentAlert, type AgentSession, type AgentsBridge, type Integration, type Platform, type ReaderData } from '../src/index.ts'
+import {
+  Reader,
+  type AgentAlert,
+  type AgentSession,
+  type AgentsBridge,
+  type Integration,
+  type Library,
+  type Platform,
+  type ReaderData,
+  type Recitation,
+} from '../src/index.ts'
 
 import layout from '../../../data/packs/qcf-v2/layout.json' with { type: 'json' }
 import manifest from '../../../data/packs/qcf-v2/manifest.json' with { type: 'json' }
@@ -42,7 +52,7 @@ describe('page geometry', () => {
     const tall = fitFontSize({ width: 600, height: 4000, lineEm, pages: 1, zoom: 1 })
     const wide = fitFontSize({ width: 4000, height: 800, lineEm, pages: 1, zoom: 1 })
     // The page, its margins and the cover either side, beside the page edges' 12px.
-    expect(tall).toBeCloseTo((600 - 24) / (lineEm * 1.18 + 4.2 + 1.5), 1)
+    expect(tall).toBeCloseTo((600 - 24) / (lineEm * 1.07 + 3.2 + 1.5), 1)
     expect(wide).toBeLessThan(800 / 30)
     expect(fitFontSize({ width: 600, height: 4000, lineEm, pages: 1, zoom: 1.5 })).toBeCloseTo(tall * 1.5, 0)
   })
@@ -237,6 +247,52 @@ describe('the reader', () => {
     expect(document.querySelector('.mushaf-ribbon')).not.toBeNull()
   })
 
+  test('F turns on focus mode: once the mouse rests the bars fade, and a move brings them back', async () => {
+    vi.useFakeTimers()
+    render(<Reader data={data} platform={platform()} settings={{ page: 77, spread: 'single' }} />)
+    const reader = document.querySelector('.reader')
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+    expect(reader).not.toHaveClass('is-calm')
+    fireEvent.keyDown(window, { key: 'f' })
+    await act(() => vi.advanceTimersByTimeAsync(3100))
+    vi.useRealTimers()
+    expect(reader).toHaveClass('is-calm')
+    fireEvent.pointerMove(window)
+    expect(reader).not.toHaveClass('is-calm')
+  })
+
+  test('the auto theme follows the system into the night', () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = (query => ({ ...matchMedia(query), matches: query.includes('dark') || query.includes('reduce') })) as typeof window.matchMedia
+    try {
+      render(<Reader data={data} platform={platform()} settings={{ theme: 'auto' }} />)
+      expect(document.querySelector('.reader')?.getAttribute('data-theme')).toBe('night')
+    } finally {
+      window.matchMedia = matchMedia
+    }
+  })
+
+  test('a page in view twenty seconds counts toward the daily goal', async () => {
+    vi.useFakeTimers()
+    const where = platform()
+    render(<Reader data={data} platform={where} settings={{ page: 77, spread: 'single', language: 'en', reading: { goal: 2 } }} />)
+    await act(() => vi.advanceTimersByTimeAsync(19_000))
+    expect(screen.getByRole('button', { name: 'Pages today: 0 of 2' })).toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(1_500))
+    expect(screen.getByRole('button', { name: 'Pages today: 1 of 2' })).toBeInTheDocument()
+    // Saved a moment after.
+    await act(() => vi.advanceTimersByTimeAsync(500))
+    vi.useRealTimers()
+    expect(where.saved.at(-1)?.reading).toMatchObject({ today: [77], khatma: [77] })
+  })
+
+  test('the paper warms from the settings', () => {
+    render(<Reader data={data} platform={platform()} settings={{ language: 'en' }} />)
+    fireEvent.click(screen.getByTitle('Settings'))
+    fireEvent.change(screen.getByLabelText('Paper warmth'), { target: { value: '0.5' } })
+    expect(document.querySelector<HTMLElement>('.reader')?.style.getPropertyValue('--warmth')).toBe('0.5')
+  })
+
   test('bookmarks are listed, and one removed comes back with undo', async () => {
     const settings = {
       spread: 'single',
@@ -344,5 +400,193 @@ describe('agents', () => {
     fireEvent.click(screen.getByTitle('Settings'))
     expect(screen.queryByText('Coding agents')).toBeNull()
     expect(screen.getByText('Language')).toBeTruthy()
+  })
+})
+
+describe('tafsir and recitation', () => {
+  const shownPages = () => [...document.querySelectorAll<HTMLElement>('.mushaf-page')].map(page => Number(page.dataset['page']))
+  const wordOf = (ayah: string) =>
+    waitFor(() => {
+      const word = document.querySelector<HTMLElement>(`.mushaf-word[data-ayah="${ayah}"]`)
+      if (!word) {
+        throw new Error(`no word of ${ayah}`)
+      }
+
+      return word
+    })
+
+  // Ayahs 3:8 and 3:9 on page 50, 3:10 on page 51, a word heard in each.
+  const recitation: Recitation = {
+    audio: 'https://audio.test/3.mp3',
+    ayahs: [
+      { ayah: 8, from: 0, to: 500, words: [{ position: 1, from: 0, to: 300 }] },
+      { ayah: 9, from: 500, to: 1000, words: [{ position: 1, from: 500, to: 800 }] },
+      { ayah: 10, from: 1000, to: 2000, words: [{ position: 1, from: 1000, to: 1500 }] },
+    ],
+  }
+
+  const withLibrary = (library: Partial<Library> = {}) => {
+    const base = platform()
+    const full: Library = {
+      tafsir: vi.fn(async (_, ayah) => ({ ayahs: [ayah], html: `<p>Tafsir of ${ayah.surah}:${ayah.ayah}</p>` })),
+      translation: vi.fn(async ayah => `Meaning of ${ayah.surah}:${ayah.ayah}<sup foot_note=1>1</sup>`),
+      recitation: vi.fn(async () => recitation),
+      ...library,
+    }
+
+    return { ...base, library: full }
+  }
+
+  test('without a library there is no tafsir or recitation to offer', async () => {
+    render(<Reader data={data} platform={platform()} settings={{ page: 50, spread: 'single' }} />)
+    fireEvent.click(await wordOf('3:5'))
+    expect(screen.queryByRole('menuitem', { name: /التفسير/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /استمع/ })).not.toBeInTheDocument()
+  })
+
+  test("an ayah's tafsir opens from its menu, in English with each ayah's meaning first", async () => {
+    const where = withLibrary({
+      tafsir: vi.fn(async () => ({
+        ayahs: [
+          { surah: 3, ayah: 5 },
+          { surah: 3, ayah: 6 },
+        ],
+        html: '<h2>Allah knows all</h2><p>He knows <b>all</b>.</p><p>هُوَ ٱلَّذِى</p>',
+      })),
+    })
+    render(<Reader data={data} platform={where} settings={{ page: 50, spread: 'single', language: 'en' }} />)
+    fireEvent.click(await wordOf('3:5'))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Tafsir/ }))
+    expect(await screen.findByRole('heading', { name: 'Allah knows all' })).toBeInTheDocument()
+    expect(where.library.tafsir).toHaveBeenCalledWith('ibn-kathir-en', { surah: 3, ayah: 5 })
+    expect(screen.getByText('Ayahs 5–6, explained together')).toBeInTheDocument()
+    expect(screen.getByText('Meaning of 3:6')).toBeInTheDocument()
+    // The footnote mark goes; the Arabic quoted finds its own direction.
+    expect(document.querySelector('.tafsir sup')).toBeNull()
+    expect(screen.getByText('هُوَ ٱلَّذِى')).toHaveAttribute('dir', 'auto')
+
+    // The next ayah is the one after those explained together.
+    fireEvent.click(screen.getByRole('button', { name: 'Next ayah' }))
+    await waitFor(() => expect(where.library.tafsir).toHaveBeenLastCalledWith('ibn-kathir-en', { surah: 3, ayah: 7 }))
+  })
+
+  test('a tafsir that fails to load can be tried again', async () => {
+    let fail = true
+    const where = withLibrary({
+      tafsir: vi.fn(async (_, ayah) => {
+        if (fail) {
+          fail = false
+          throw new Error('offline')
+        }
+
+        return { ayahs: [ayah], html: '<p>الله لا إله إلا هو</p>' }
+      }),
+    })
+    render(<Reader data={data} platform={where} settings={{ page: 50, spread: 'single' }} />)
+    fireEvent.click(await wordOf('3:2'))
+    fireEvent.keyDown(window, { key: 't' })
+    fireEvent.click(await screen.findByRole('button', { name: /أعد المحاولة/ }))
+    expect(await screen.findByText('الله لا إله إلا هو')).toBeInTheDocument()
+    expect(where.library.tafsir).toHaveBeenCalledWith('muyassar', { surah: 3, ayah: 2 })
+  })
+
+  test('nothing but plain structure comes through from a source', async () => {
+    const where = withLibrary({
+      tafsir: vi.fn(async ayah => ({
+        ayahs: [{ surah: 3, ayah: 5 }],
+        html: `<p onclick="alert(1)">Plain<script>alert(1)</script><img src=x onerror="alert(1)"><a href="https://x.test">link</a></p>${String(ayah)}`,
+      })),
+    })
+    render(<Reader data={data} platform={where} settings={{ page: 50, spread: 'single' }} />)
+    fireEvent.click(await wordOf('3:5'))
+    fireEvent.keyDown(window, { key: 't' })
+    const text = await waitFor(() => {
+      const body = document.querySelector('.tafsir-text')
+      if (!body) {
+        throw new Error('no tafsir yet')
+      }
+
+      return body
+    })
+    expect(text.querySelector('script, img, a, [onclick]')).toBeNull()
+    expect(text.textContent).toContain('Plainlink')
+  })
+
+  test('a recitation lights the word heard, and turns the page when it reaches the next', async () => {
+    // The audio as WebKit plays it: a seek before the length is known is dropped.
+    const time = { now: 0, ready: 0 }
+    let player: HTMLMediaElement | undefined
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async function (this: HTMLMediaElement) {
+      player = this
+      this.dispatchEvent(new Event('play'))
+    })
+    const readyState = vi.spyOn(HTMLMediaElement.prototype, 'readyState', 'get').mockImplementation(() => time.ready)
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'))
+    })
+    const currentTime = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime')
+    Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+      configurable: true,
+      get: () => time.now,
+      set: (value: number) => {
+        time.now = value
+      },
+    })
+    try {
+      const where = withLibrary()
+      render(<Reader data={data} platform={where} settings={{ page: 50, spread: 'single', reciter: 'husary' }} />)
+      fireEvent.click(await wordOf('3:9'))
+      fireEvent.click(screen.getByRole('menuitem', { name: /استمع/ }))
+      await waitFor(() => expect(play).toHaveBeenCalled())
+      expect(where.library.recitation).toHaveBeenCalledWith('husary', 3)
+      expect(screen.getByRole('region', { name: 'التلاوة' })).toHaveTextContent('محمود خليل الحصري')
+
+      // Dropped, the seek is made again once the length is known; 3:8 is never lit on the way.
+      time.now = 0
+      await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+      expect(document.querySelector('.mushaf-word.is-heard')).toBeNull()
+      time.ready = 1
+      act(() => {
+        player?.dispatchEvent(new Event('loadedmetadata'))
+      })
+
+      const audio = await waitFor(() => {
+        const heard = document.querySelector('.mushaf-word.is-heard')
+        if (!heard) {
+          throw new Error('no word heard yet')
+        }
+
+        return heard
+      })
+      expect(audio).toHaveAttribute('data-ayah', '3:9')
+
+      // A second on: 3:10, on the next page.
+      time.now = 1.2
+      act(() => {
+        player?.dispatchEvent(new Event('timeupdate'))
+      })
+      await waitFor(() => expect(shownPages()).toEqual([51]))
+      await waitFor(() => expect(document.querySelector('.mushaf-word.is-heard')).toHaveAttribute('data-ayah', '3:10'))
+
+      fireEvent.click(screen.getByRole('button', { name: 'أنهِ التلاوة' }))
+      expect(screen.queryByRole('region', { name: 'التلاوة' })).not.toBeInTheDocument()
+      expect(document.querySelector('.mushaf-word.is-heard')).toBeNull()
+    } finally {
+      // Unmounted while the stand-ins still play the part.
+      cleanup()
+      play.mockRestore()
+      pause.mockRestore()
+      readyState.mockRestore()
+      if (currentTime) {
+        Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', currentTime)
+      }
+    }
+  })
+
+  test('opened again, the reader shows the ayah it stopped at', async () => {
+    render(<Reader data={data} platform={platform()} settings={{ page: 50, spread: 'single', lastAyah: { surah: 3, ayah: 7 } }} />)
+    await wordOf('3:7')
+    expect(new Set([...document.querySelectorAll<HTMLElement>('.mushaf-word.is-active')].map(word => word.dataset['ayah']))).toEqual(new Set(['3:7']))
+    expect(screen.getByText(/توقفت عند/)).toBeInTheDocument()
   })
 })

@@ -1,4 +1,4 @@
-import type { PackLayout, QuranMeta, SearchText, Settings } from '@mushaf/core'
+import type { AyahRef, PackLayout, QuranMeta, ReciterId, SearchText, Settings, TafsirId } from '@mushaf/core'
 import type { PackManifest } from '@mushaf/packs'
 
 /**
@@ -15,6 +15,31 @@ export interface Platform {
   saveSettings(settings: Settings): Promise<void>
   /** The coding agents, where the platform has them. */
   agents?: AgentsBridge
+  /** Tafsir, translation and recitation, where the platform can reach them. */
+  library?: Library
+}
+
+/** A tafsir's passage on an ayah. Some explain several ayahs together. */
+export interface TafsirPassage {
+  /** The ayahs it explains, in order; the one asked for among them. */
+  ayahs: AyahRef[]
+  /** As the source gives it: HTML, shown with only its plain structure kept. */
+  html: string
+}
+
+/** A surah recited, with when each ayah and each of its words is heard. */
+export interface Recitation {
+  audio: string
+  /** In order. ms from the audio's start. */
+  ayahs: { ayah: number; from: number; to: number; words: { position: number; from: number; to: number }[] }[]
+}
+
+/** Books and recitations from outside the app, fetched when asked for. */
+export interface Library {
+  tafsir(tafsir: TafsirId, ayah: AyahRef): Promise<TafsirPassage>
+  /** An ayah's meaning in English (Saheeh International), as HTML. */
+  translation(ayah: AyahRef): Promise<string>
+  recitation(reciter: ReciterId, surah: number): Promise<Recitation>
 }
 
 /**

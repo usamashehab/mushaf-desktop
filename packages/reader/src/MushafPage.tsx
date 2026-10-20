@@ -53,10 +53,12 @@ interface PageProps {
   loadingText: string
   /** Bookmarks on this page: a ribbon for the page, a tint for each ayah. */
   bookmarks?: Bookmark[]
+  /** The ayah being recited, and the word heard in it by position. */
+  heard?: { surah: number; ayah: number; word: number | undefined } | undefined
 }
 
 /** One Mushaf page, drawn with its own font so every line matches the print. */
-export function MushafPage({ data, platform, page, fontSize, active, onPickAyah, loadingText, bookmarks = [] }: PageProps) {
+export function MushafPage({ data, platform, page, fontSize, active, onPickAyah, loadingText, bookmarks = [], heard }: PageProps) {
   const ready = usePageFont(data, platform, page)
   const [hover, setHover] = useState<string>()
   const lines = data.layout.pages[page - 1]?.lines ?? []
@@ -64,6 +66,7 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
   const firstAyah = lines.flatMap(line => (line.t === 'ayah' ? line.w : [])).at(0)
   const surah = firstAyah ? data.meta.surahs[firstAyah[0] - 1] : undefined
   const activeKey = active ? ayahKey(active) : undefined
+  const heardKey = heard ? ayahKey(heard) : undefined
   const family = pageFamily(data, page)
   const isOpening = page <= 2
   const markedAyahs = new Map(bookmarks.filter(mark => mark.ayah).map(mark => [`${mark.surah}:${mark.ayah}`, mark.color]))
@@ -85,7 +88,7 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
   }
 
   const word = (w: LayoutWord, index: number) => {
-    const [s, a, , code, text, kind] = w
+    const [s, a, position, code, text, kind] = w
     const key = `${s}:${a}`
     const marked = markedAyahs.get(key)
     const classes = [
@@ -94,6 +97,8 @@ export function MushafPage({ data, platform, page, fontSize, active, onPickAyah,
       key === hover ? 'is-hover' : '',
       key === activeKey ? 'is-active' : '',
       marked ? 'is-marked' : '',
+      key === heardKey ? 'is-recited' : '',
+      key === heardKey && position === heard?.word ? 'is-heard' : '',
     ]
 
     return (

@@ -6,9 +6,11 @@
   --surface: rgba(252, 250, 244, 0.86);
   --surface-solid: #fbf9f3;
   --hover: rgba(31, 107, 83, 0.07);
-  --paper: #fdf6e6;
+  --paper-base: #fdf6e6;
   --ink: #1c1a16;
-  --quran-ink: #000;
+  --ink-base: #000;
+  --warm-paper: #f3d6a0;
+  --warm-ink: #3b2610;
   --frame-stroke: #a8783a;
   --frame-fill: #f0dfbc;
   --frame-inner: #fbf2de;
@@ -32,6 +34,12 @@
   --mark-violet: #7d5bbf;
   --ui: 'IBM Plex Sans Arabic', system-ui, 'Segoe UI', 'Noto Sans Arabic', sans-serif;
 
+  /* The paper's tone, 0–1 each, set from the settings; it tints the book alone. */
+  --warmth: 0;
+  --dim: 0;
+  --paper: var(--paper-base);
+  --quran-ink: var(--ink-base);
+
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -51,8 +59,9 @@
   --bg-glow: #e9dfc6;
   --surface: rgba(240, 231, 208, 0.88);
   --surface-solid: #efe5cc;
-  --paper: #f4e8cc;
+  --paper-base: #f4e8cc;
   --ink: #3a2e1c;
+  --warm-paper: #e8c286;
   --frame-fill: #e9d4a8;
   --frame-inner: #f7ebd0;
   --muted: #7d6b4f;
@@ -73,9 +82,11 @@
   --surface: rgba(21, 25, 28, 0.88);
   --surface-solid: #171b1e;
   --hover: rgba(255, 255, 255, 0.05);
-  --paper: #171b1e;
+  --paper-base: #171b1e;
   --ink: #e7e2d3;
-  --quran-ink: #ece6d6;
+  --ink-base: #ece6d6;
+  --warm-paper: #2b2215;
+  --warm-ink: #f0d6a2;
   --frame-stroke: #c9a86a;
   --frame-fill: #2a241a;
   --frame-inner: #1f1c16;
@@ -824,6 +835,21 @@
   padding: 4px 48px;
 }
 
+/* Focus mode: once the mouse rests, all but the Mushaf fades slowly away, keeping its
+   place; moved, it all comes straight back. */
+.reader.is-calm .top-bar:not(:focus-within),
+.reader.is-calm .page-slider:not(:focus-within),
+.reader.is-calm .recitation-bar:not(:focus-within),
+.reader.is-calm .turn {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+}
+
+.reader.is-calm .view {
+  cursor: none;
+}
+
 /* Dragged sideways, the page turns: no text is picked up on the way. */
 .view.is-swiping {
   cursor: grabbing;
@@ -834,6 +860,20 @@
 /* ───────────── The book ───────────── */
 
 /* A leather cover with a tooled gold border, the pages laid open on it. */
+/* Warmer, and dimmed, as the settings ask: the pages and their ink, not the controls. */
+.book {
+  --paper: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--paper-base), var(--warm-paper) calc(var(--warmth) * 45%)),
+    black calc(var(--dim) * 30%)
+  );
+  --quran-ink: color-mix(
+    in oklab,
+    color-mix(in oklab, var(--ink-base), var(--warm-ink) calc(var(--warmth) * 35%)),
+    var(--paper-base) calc(var(--dim) * 30%)
+  );
+}
+
 .book {
   position: relative;
   padding: 0.6em 0.75em;
@@ -1090,6 +1130,62 @@
   right: 4px;
 }
 
+/* ───────────── Wird ring ───────────── */
+
+/* Today's pages toward the goal: a ring that fills, gold once the goal is met. */
+.wird {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-inline-start: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.wird svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.wird circle {
+  fill: none;
+  stroke-width: 3;
+}
+
+.wird-track {
+  stroke: var(--line);
+}
+
+.wird-fill {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 600ms ease, stroke 300ms;
+}
+
+.wird.is-met .wird-fill {
+  stroke: var(--gold);
+}
+
+.reader .wird span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.reader .wird:hover span,
+.reader .wird.is-met span {
+  color: var(--ink);
+}
+
 /* ───────────── Page slider ───────────── */
 
 .page-slider {
@@ -1194,6 +1290,50 @@
 .reader .ayah-menu button:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* ───────────── Recitation ───────────── */
+
+/* While a recitation is on: in the corner, clear of the toasts. */
+.recitation-bar {
+  position: fixed;
+  z-index: 40;
+  bottom: 58px;
+  inset-inline-end: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+  animation: panel-in 160ms ease-out;
+}
+
+.recitation-place {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.recitation-place span {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ayah-menu kbd {
+  margin-inline-start: auto;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
 }
 
 .toasts {
@@ -1375,6 +1515,15 @@
 
 .mushaf-word.is-active {
   background: var(--word-active);
+}
+
+/* The ayah being recited, softly, and the word heard in it, plainly. */
+.mushaf-word.is-recited {
+  background: var(--word-hover);
+}
+
+.mushaf-word.is-heard {
+  background: var(--gold-soft);
 }
 
 .mushaf-surah-header {
@@ -1668,6 +1817,138 @@
 .setting-toggle.is-stacked .segmented button {
   flex: 1;
   padding: 0 6px;
+}
+
+.setting-range {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.setting-range input {
+  flex: 0 1 150px;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.setting-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.setting-select select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* ───────────── Tafsir ───────────── */
+
+.tafsir {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tafsir-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tafsir-place {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  text-align: center;
+  font-size: 14px;
+}
+
+.tafsir-place span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.tafsir-body {
+  font-size: 14.5px;
+  line-height: 1.85;
+}
+
+.tafsir-body:lang(ar) {
+  font-family: 'Amiri', var(--ui);
+  font-size: 17px;
+  line-height: 2;
+}
+
+.tafsir-body h3,
+.tafsir-body h4 {
+  margin: 16px 0 6px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.tafsir-body p,
+.tafsir-body div {
+  margin: 0 0 10px;
+}
+
+/* Arabic quoted in an English tafsir: the ayah as written, in its own font and size. */
+.tafsir-body:lang(en) [dir='auto']:dir(rtl) {
+  font-family: 'Amiri', var(--ui);
+  font-size: 18px;
+  line-height: 2;
+}
+
+.tafsir-term {
+  color: var(--accent);
+}
+
+.tafsir-translation {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-inline-start: 3px solid var(--gold);
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.tafsir-translation h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tafsir-translation p:last-child {
+  margin-bottom: 0;
+}
+
+.tafsir-number {
+  color: var(--muted);
+}
+
+.tafsir-credit {
+  margin-top: 18px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.setting-value {
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
 .switch {

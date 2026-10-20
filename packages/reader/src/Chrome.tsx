@@ -1,9 +1,9 @@
-// The pieces around the page: the ayah menu, the page slider, and toasts.
+// The pieces around the page: the ayah menu, the page slider, the wird ring, and toasts.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import { addBookmark, findBookmark, removeBookmark, type AyahRef } from '@mushaf/core'
-import { Bookmark, BookmarkMinus, Copy } from 'lucide-react'
+import { addBookmark, currentStreak, findBookmark, localDay, pagesToday, removeBookmark, type AyahRef } from '@mushaf/core'
+import { BookOpenText, Bookmark, BookmarkMinus, Copy, Headphones } from 'lucide-react'
 
 import { useReader } from './context.tsx'
 
@@ -20,8 +20,17 @@ function ayahText(words: string[], surahName: string, ayah: string) {
   return `${words.join(' ')} ﴿${ayah}﴾ [${surahName}]`
 }
 
-/** What can be done with a clicked ayah: bookmark it, copy it. */
-export function AyahMenu({ picked, onClose, onCopied }: { picked: Picked; onClose: () => void; onCopied: () => void }) {
+interface AyahMenuProps {
+  picked: Picked
+  onClose: () => void
+  onCopied: () => void
+  /** Where the platform has a library: read the ayah's tafsir, hear it recited. */
+  onTafsir?: (() => void) | undefined
+  onListen?: (() => void) | undefined
+}
+
+/** What can be done with a clicked ayah: bookmark it, copy it, read its tafsir, hear it. */
+export function AyahMenu({ picked, onClose, onCopied, onTafsir, onListen }: AyahMenuProps) {
   const { data, settings, update, t, n, surahName, toast } = useReader()
   const menu = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState({ left: picked.x, top: picked.y + 14 })
@@ -89,6 +98,20 @@ export function AyahMenu({ picked, onClose, onCopied }: { picked: Picked; onClos
         <Copy size={16} />
         {t.copyAyah}
       </button>
+      {onTafsir ? (
+        <button type="button" role="menuitem" onClick={onTafsir}>
+          <BookOpenText size={16} />
+          {t.tafsir}
+          <kbd>T</kbd>
+        </button>
+      ) : null}
+      {onListen ? (
+        <button type="button" role="menuitem" onClick={onListen}>
+          <Headphones size={16} />
+          {t.listen}
+          <kbd>P</kbd>
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -140,6 +163,30 @@ export function PageSlider({ page, onPage }: { page: number; onPage: (page: numb
         </div>
       </div>
     </div>
+  )
+}
+
+/** Today's pages toward the daily goal, as a ring that fills; shown only with a goal set. */
+export function WirdRing({ onClick }: { onClick: () => void }) {
+  const { settings, t, n } = useReader()
+  const { reading } = settings
+  if (reading.goal === 0) {
+    return null
+  }
+  const day = localDay(new Date())
+  const read = pagesToday(reading, day)
+  const streak = currentStreak(reading, day)
+  const share = Math.min(1, read / reading.goal)
+  const title = [t.todayOf(n(read), n(reading.goal)), ...(streak > 0 ? [t.streak(streak, n(streak))] : [])].join(' · ')
+
+  return (
+    <button type="button" className={`wird${share >= 1 ? ' is-met' : ''}`} onClick={onClick} title={title} aria-label={title}>
+      <svg viewBox="0 0 36 36" aria-hidden="true">
+        <circle className="wird-track" cx="18" cy="18" r="15" />
+        <circle className="wird-fill" cx="18" cy="18" r="15" pathLength={1} strokeDasharray={`${share} 1`} />
+      </svg>
+      <span>{n(read)}</span>
+    </button>
   )
 }
 

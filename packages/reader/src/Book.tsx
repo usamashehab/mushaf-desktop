@@ -10,7 +10,8 @@ interface Flip {
   id: number
 }
 
-const FLIP_MS = 720
+/** Unhurried, as a page is turned by hand. */
+const FLIP_MS = 860
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches

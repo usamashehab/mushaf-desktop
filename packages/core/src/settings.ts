@@ -1,6 +1,10 @@
+import { RECITERS, TAFSIR_IDS, type ReciterId, type TafsirId } from './library.ts'
 import { clampPage, isPage } from './navigation.ts'
+import type { AyahRef } from './types.ts'
 
+/** The theme drawn; `auto` follows the system's light or dark. */
 export type Theme = 'day' | 'night' | 'sepia'
+export type ThemeChoice = Theme | 'auto'
 export type Spread = 'auto' | 'single' | 'double'
 export type Language = 'ar' | 'en'
 
@@ -24,11 +28,40 @@ export interface AgentSettings {
   openAfterMinutes: number
 }
 
+/** What the reader has read: today's pages toward a daily goal, and the khatma so far. */
+export interface Reading {
+  /** Pages a day; 0 sets no goal. */
+  goal: number
+  /** The local day ("2026-10-20") `today` belongs to. */
+  day: string
+  /** Pages read that day. */
+  today: number[]
+  /** Days in a row the goal was met, the last of them `streakDay`. */
+  streak: number
+  streakDay: string
+  /** Pages read in the khatma under way, in order. */
+  khatma: number[]
+  /** Khatmas completed. */
+  khatmas: number
+}
+
 export interface Settings {
   v: 1
   page: number
   bookmarks: Bookmark[]
-  theme: Theme
+  theme: ThemeChoice
+  /** The bars fade once the mouse rests. */
+  focusMode: boolean
+  /** How warm the paper is, and how much it is dimmed: 0–1 each. */
+  paper: { warmth: number; dim: number }
+  reading: Reading
+  /** The ayah the reader was last at, picked or heard, to come back to. */
+  lastAyah: AyahRef | null
+  /** The tafsir shown; null follows the interface language. */
+  tafsir: TafsirId | null
+  reciter: ReciterId
+  /** A soft rustle as a page turns. */
+  pageSound: boolean
   /** 1 fits the page to the window. */
   zoom: number
   spread: Spread
@@ -59,6 +92,13 @@ export const DEFAULT_SETTINGS: Settings = {
   page: 1,
   bookmarks: [],
   theme: 'day',
+  focusMode: false,
+  paper: { warmth: 0, dim: 0 },
+  reading: { goal: 0, day: '', today: [], streak: 0, streakDay: '', khatma: [], khatmas: 0 },
+  lastAyah: null,
+  tafsir: null,
+  reciter: 'alafasy',
+  pageSound: false,
   zoom: 1,
   spread: 'auto',
   language: 'ar',
@@ -89,6 +129,35 @@ function agent(value: unknown, fallback: AgentSettings): AgentSettings {
     enabled: boolean(raw['enabled'], fallback.enabled),
     openAfterMinutes: number(raw['openAfterMinutes'], fallback.openAfterMinutes, 0, 24 * 60),
   }
+}
+
+const day = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '')
+
+/** Pages, each once, in order. */
+const pageList = (value: unknown) =>
+  Array.isArray(value) ? [...new Set(value.filter((page): page is number => typeof page === 'number' && isPage(page)))].sort((a, b) => a - b) : []
+
+function reading(value: unknown): Reading {
+  const raw = isRecord(value) ? value : {}
+
+  return {
+    goal: Math.round(number(raw['goal'], 0, 0, 60)),
+    day: day(raw['day']),
+    today: pageList(raw['today']),
+    streak: Math.round(number(raw['streak'], 0, 0, Number.MAX_SAFE_INTEGER)),
+    streakDay: day(raw['streakDay']),
+    khatma: pageList(raw['khatma']),
+    khatmas: Math.round(number(raw['khatmas'], 0, 0, Number.MAX_SAFE_INTEGER)),
+  }
+}
+
+function ayahRef(value: unknown): AyahRef | null {
+  if (!isRecord(value) || typeof value['surah'] !== 'number' || typeof value['ayah'] !== 'number') {
+    return null
+  }
+  const { surah, ayah } = value
+
+  return Number.isInteger(surah) && Number.isInteger(ayah) && surah >= 1 && surah <= 114 && ayah >= 1 && ayah <= 286 ? { surah, ayah } : null
 }
 
 function bookmark(value: unknown): Bookmark | undefined {
@@ -129,6 +198,7 @@ export function migrateSettings(stored: unknown): Settings {
     }
   }
   const alerts = isRecord(raw['alerts']) ? raw['alerts'] : {}
+  const paper = isRecord(raw['paper']) ? raw['paper'] : {}
 
   return {
     v: 1,
@@ -138,7 +208,14 @@ export function migrateSettings(stored: unknown): Settings {
           .map(bookmark)
           .filter((b, i, all): b is Bookmark => b !== undefined && all.findIndex(other => other?.id === b.id) === i)
       : [],
-    theme: pick(raw['theme'], ['day', 'night', 'sepia'] as const, d.theme),
+    theme: pick(raw['theme'], ['day', 'night', 'sepia', 'auto'] as const, d.theme),
+    focusMode: boolean(raw['focusMode'], d.focusMode),
+    paper: { warmth: number(paper['warmth'], d.paper.warmth, 0, 1), dim: number(paper['dim'], d.paper.dim, 0, 1) },
+    reading: reading(raw['reading']),
+    lastAyah: ayahRef(raw['lastAyah']),
+    tafsir: TAFSIR_IDS.includes(raw['tafsir'] as TafsirId) ? (raw['tafsir'] as TafsirId) : null,
+    reciter: pick(raw['reciter'], RECITERS, d.reciter),
+    pageSound: boolean(raw['pageSound'], d.pageSound),
     zoom: number(raw['zoom'], d.zoom, 0.5, 3),
     spread: pick(raw['spread'], ['auto', 'single', 'double'] as const, d.spread),
     language: pick(raw['language'], ['ar', 'en'] as const, d.language),

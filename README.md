@@ -44,7 +44,7 @@ When the agent finishes, or stops to ask you something, the Mushaf tells you.
      `xattr -cr /Applications/Mushaf.app`
 
 3. Open **Mushaf**. The first time, it downloads the page fonts (about 95 MB) once;
-   after that it works offline.
+   after that it works offline. Only the tafsir and the recitation need the internet.
 
 4. Connect your coding agent: see the next section.
 
@@ -123,7 +123,9 @@ project folder's name, and, for Claude Code, Codex and Antigravity, where the se
 transcript or log file is. Prompts and replies never leave the hook. Those three agents
 have no hook for a task you stop with Esc, so the app reads the file's last lines (at
 most 64 KB) to notice one. Nothing leaves your computer: the app and the hooks talk over
-a local socket only you can open. So that a restart doesn't lose track of the agents at
+a local socket only you can open. The one exception is what you ask for yourself:
+opening an ayah's tafsir, or listening to a recitation, fetches that ayah's tafsir, or that
+surah's audio, from [Quran.com](https://quran.com); nothing else goes with the request. So that a restart doesn't lose track of the agents at
 work, the app keeps them in `~/.mushaf/sessions.json`, and while it isn't running the hooks
 keep a finishing task's event in `~/.mushaf/missed.jsonl`; both hold only the fields above.
 
@@ -134,6 +136,13 @@ Open Settings with the sliders button at the end of the top bar, or by clicking 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Language | العربية | The interface language: Arabic or English |
+| Theme | Day | Day, Paper, Night, or **Auto**, which follows your computer's light or dark mode |
+| Focus mode | off | Once the mouse rests for 3 seconds, the bars fade and only the Mushaf is left. **F** turns it on or off |
+| A soft sound as a page turns | off | |
+| Paper warmth, Dim | none | Make the pages warmer, or dimmer, for long reading; only the pages change |
+| Daily reading | Off | A daily goal of 1, 2, 4, 10 or 20 pages (20 is a juz). A ring in the top bar fills as you read, and shows how many days in a row you met it. A page counts once it has been in view for 20 seconds |
+| Khatma | — | How many of the 604 pages you have read in this khatma, and the khatmas finished. A note marks each juz and the whole Quran as you finish it. **Start a new khatma** clears it, with undo |
+| Reciter | Mishary Alafasy | Who recites when you listen: Alafasy, Al-Husary, Al-Minshawi, AbdulBaset, As-Sudais or Ash-Shuraim |
 | *Agent* switch | off | Connects or disconnects that agent's hooks (see above) |
 | Open the Mushaf after | 2 minutes | Per agent: how long one task runs before the Mushaf opens. Never, 1, 2, 3, 5, 10, 15 or 30 minutes |
 | When it is time for the Mushaf | Open in front | **Open behind** shows it behind the window you use; **Notify only** leaves it in the tray and sends a notification |
@@ -151,8 +160,20 @@ The pages sit in an open book: going to the next or the previous page turns the 
 over, as a Mushaf turns; jumping further shows the new place at once, and with reduced
 motion set on your computer the pages change without turning. Drag a page sideways, or
 swipe two fingers sideways on a touchpad, to turn it: rightward for the next page,
-leftward for the one before; drag up or down to select text. Click an ayah for its menu (bookmark, copy); click it again, or anywhere off
-the book, to let it go. Type in the search box to search the
+leftward for the one before; drag up or down to select text. Click an ayah for its menu
+(bookmark, copy, tafsir, listen); click it again, or anywhere off the book, to let it go.
+The Mushaf opens where you stopped, with that ayah shown.
+
+**Tafsir** opens beside the page, with arrows to the ayah before and after. In Arabic it
+is al-Tafsir al-Muyassar (King Fahd Complex); you can switch to Tafsir al-Sa'di or Tafsir
+Ibn Kathir. In English it is Tafsir Ibn Kathir, abridged (Darussalam), each ayah's meaning
+first in the Saheeh International translation. These are tafsirs the scholars of Ahl
+al-Sunnah rely on. Ibn Kathir sometimes explains several ayahs together; the panel says so.
+
+**Listen** recites from that ayah on, surah after surah. Each word is lit as it is
+recited, and the page turns with the recitation. Pause or stop it in the corner.
+
+Type in the search box to search the
 Quran's text, or to go somewhere: `50` (a page), `2:255` (an ayah), `البقرة` or
 `Al-Baqarah` (a surah).
 
@@ -163,7 +184,10 @@ Quran's text, or to go somewhere: `50` (a page), `2:255` (an ayah), `البقر�
 | Home / End | First / last page |
 | Ctrl+K, Ctrl+F, Ctrl+G or / | Search and go to |
 | + / − / 0 | Zoom in / out / reset |
-| D | Day, paper and night themes |
+| D | Day, paper, night and auto themes |
+| F | Focus mode on or off |
+| T | Tafsir of the ayah picked (or the first on the page) |
+| P | Listen from the ayah picked; pause and go on |
 | B | Bookmark this place |
 | M | The bookmarks |
 | I | The index of surahs and juz |
@@ -362,6 +386,11 @@ the reason.
 - Fonts: [King Fahd Glorious Quran Printing Complex](https://qurancomplex.gov.sa) (KFGQPC),
   free to use and distribute, not to modify or sell.
 - Basmala font: KFGQPC, via [nuqayah/qpc-fonts](https://github.com/nuqayah/qpc-fonts).
+- Tafsir and translation, fetched when asked for: al-Tafsir al-Muyassar (KFGQPC), Tafsir
+  al-Sa'di, Tafsir Ibn Kathir (Arabic, and in English abridged by Darussalam), and the
+  Saheeh International translation, through the [Quran.com API](https://api-docs.quran.foundation).
+- Recitations and each word's timing: [Quran.com](https://quran.com) and
+  [QuranicAudio](https://quranicaudio.com).
 
 ## License
 

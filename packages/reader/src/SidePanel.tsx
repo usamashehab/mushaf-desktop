@@ -18,8 +18,9 @@ import { BookmarkPlus, Check, Pencil, Search, Trash2, X } from 'lucide-react'
 
 import { SettingsTab } from './Agents.tsx'
 import { useReader } from './context.tsx'
+import { TafsirPanel } from './Tafsir.tsx'
 
-export type PanelTab = 'surahs' | 'juz' | 'bookmarks' | 'settings'
+export type PanelTab = 'surahs' | 'juz' | 'bookmarks' | 'tafsir' | 'settings'
 
 /** The eight-pointed star the Mushaf marks numbers with. */
 export function StarNumber({ value }: { value: string }) {
@@ -266,15 +267,19 @@ interface PanelProps {
   currentJuz: number
   pausedUntil: number | null
   onPause: (until: number | null) => void
+  /** The ayah the tafsir tab explains, and a move to another. */
+  tafsirAyah: AyahRef | undefined
+  onTafsirAyah: (ayah: AyahRef) => void
 }
 
-/** The side panel: the surahs, the juz, and the bookmarks. */
-export function SidePanel({ tab, onTab, onClose, page, active, currentSurah, currentJuz, pausedUntil, onPause }: PanelProps) {
-  const { t, settings, n } = useReader()
+/** The side panel: the surahs, the juz, the bookmarks, the tafsir and the settings. */
+export function SidePanel({ tab, onTab, onClose, page, active, currentSurah, currentJuz, pausedUntil, onPause, tafsirAyah, onTafsirAyah }: PanelProps) {
+  const { t, settings, n, platform } = useReader()
   const tabs: [PanelTab, string][] = [
     ['surahs', t.surahs],
     ['juz', t.juzTab],
     ['bookmarks', `${t.bookmarks}${settings.bookmarks.length > 0 ? ` (${n(settings.bookmarks.length)})` : ''}`],
+    ...(platform.library ? [['tafsir', t.tafsir] as [PanelTab, string]] : []),
     ['settings', t.settings],
   ]
 
@@ -295,6 +300,7 @@ export function SidePanel({ tab, onTab, onClose, page, active, currentSurah, cur
       {tab === 'surahs' ? <SurahIndex currentSurah={currentSurah} /> : null}
       {tab === 'juz' ? <JuzIndex currentJuz={currentJuz} /> : null}
       {tab === 'bookmarks' ? <BookmarkList page={page} active={active} /> : null}
+      {tab === 'tafsir' ? <TafsirPanel ayah={tafsirAyah ?? active} onAyah={onTafsirAyah} /> : null}
       {tab === 'settings' ? <SettingsTab pausedUntil={pausedUntil} onPause={onPause} /> : null}
     </aside>
   )

@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; font-src 'self' mushaf: http://mushaf.localhost data:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost",
+      "csp": "default-src 'self'; font-src 'self' mushaf: http://mushaf.localhost data:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost https://api.quran.com https://api.qurancdn.com; media-src 'self' https://download.quranicaudio.com",
       "devCsp": null
     }
   },

@@ -4,7 +4,9 @@ import { agentSettings, parseGoTo, type OpenStyle, type Settings } from '@mushaf
 import { BellRing, CheckCircle2, ChevronDown, CirclePause, Hand, Play, X } from 'lucide-react'
 
 import { useReader } from './context.tsx'
+import { Switch, Toggle } from './controls.tsx'
 import type { AgentAlert, AgentSession, AgentsBridge, Integration } from './platform.ts'
+import { ReadingSettings } from './ReadingSettings.tsx'
 
 /** An alert stays this long unless dismissed. */
 const ALERT_MS = 2 * 60 * 1000
@@ -208,14 +210,6 @@ export function AgentChip({ sessions, pausedUntil, onClick }: { sessions: AgentS
   )
 }
 
-function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean; label: string }) {
-  return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" disabled={disabled} onClick={() => onChange(!on)}>
-      <span />
-    </button>
-  )
-}
-
 function AgentRow({ integration, onChange }: { integration: Integration; onChange: (next: Integration) => void }) {
   const { t, n, settings, update, platform, toast } = useReader()
   const [busy, setBusy] = useState(false)
@@ -297,16 +291,7 @@ function AgentRow({ integration, onChange }: { integration: Integration; onChang
   )
 }
 
-function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <div className="setting-toggle">
-      <span>{label}</span>
-      <Switch on={on} onChange={onChange} label={label} />
-    </div>
-  )
-}
-
-/** The settings tab: the agents, the alerts, and the interface language. */
+/** The settings tab: the interface language, reading, the agents and the alerts. */
 export function SettingsTab({ pausedUntil, onPause }: { pausedUntil: number | null; onPause: (until: number | null) => void }) {
   const { t, settings, update, platform } = useReader()
   const [integrations, setIntegrations] = useState<Integration[]>()
@@ -352,6 +337,7 @@ export function SettingsTab({ pausedUntil, onPause }: { pausedUntil: number | nu
           </div>
         </div>
       </section>
+      <ReadingSettings />
       {bridge ? (
         <>
           <section className="settings-section">

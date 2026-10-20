@@ -38,6 +38,10 @@ for (const [language, theme] of [
     await page.locator('.agent-row.is-off .switch').click()
     await expect(page.locator('.agent-row.is-on')).toHaveCount(2)
     await expect(page.locator('.agent-row-note')).toHaveCount(1)
+    // Reading comes first; the agents are scrolled to the top, wherever the click left them.
+    const sections = page.locator('.settings-section')
+    await expect(sections.nth(1)).toHaveScreenshot(`reading-settings-${language}-${theme}.png`)
+    await sections.filter({ has: page.locator('.agent-row') }).evaluate(section => section.scrollIntoView({ block: 'start' }))
     await expect(page.locator('.side-panel')).toHaveScreenshot(`agents-settings-${language}-${theme}.png`)
   })
 }

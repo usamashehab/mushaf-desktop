@@ -5,6 +5,7 @@ import type { Settings } from '@mushaf/core'
 import type { AgentAlert, AgentSession, AgentsBridge, Integration, Platform } from '@mushaf/reader'
 
 import { extraFontPath, pageFontPath, type FontFile } from './fonts.ts'
+import { quranComLibrary } from './library.ts'
 
 export const isTauri = () => '__TAURI_INTERNALS__' in window
 
@@ -49,6 +50,7 @@ export const tauriPlatform: Platform = {
   loadSettings: () => invoke<unknown>('load_settings'),
   saveSettings: (settings: Settings) => invoke('save_settings', { settings }),
   agents,
+  library: quranComLibrary(),
 }
 
 export interface DownloadProgress {

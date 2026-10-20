@@ -5,6 +5,8 @@ import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_SETTINGS,
   agentSettings,
+  countPage,
+  currentStreak,
   findSurah,
   foldArabic,
   migrateSettings,
@@ -12,12 +14,15 @@ import {
   pageOfAyah,
   pageOfJuz,
   parseGoTo,
+  stepAyah,
+  tafsirOf,
   quarterLabel,
   spreadOf,
   toArabicDigits,
   toLatinDigits,
   turn,
   type QuranMeta,
+  type Settings,
 } from '../src/index.ts'
 
 const meta = JSON.parse(
@@ -162,5 +167,88 @@ describe('settings', () => {
     // "Bring to the front" off, from before there was a choice.
     expect(migrateSettings({ alerts: { focusOnOpen: false } }).alerts.openStyle).toBe('behind')
     expect(migrateSettings({ alerts: { openStyle: 'notify', onlyWhenIdle: false } }).alerts).toMatchObject({ openStyle: 'notify', onlyWhenIdle: false })
+  })
+
+  test('reading settings: auto theme, focus, paper tone and the wird are kept, bad values dropped', () => {
+    expect(migrateSettings({ theme: 'auto' }).theme).toBe('auto')
+    const settings = migrateSettings({
+      focusMode: true,
+      paper: { warmth: 2, dim: 'x' },
+      reading: { goal: 4.4, day: 'yesterday', today: [3, 3, 900, 1], streak: 2, streakDay: '2026-10-19', khatma: [5, 'x', 2] },
+    })
+    expect(settings.focusMode).toBe(true)
+    expect(settings.paper).toEqual({ warmth: 1, dim: 0 })
+    expect(settings.reading).toEqual({ goal: 4, day: '', today: [1, 3], streak: 2, streakDay: '2026-10-19', khatma: [2, 5], khatmas: 0 })
+  })
+})
+
+describe('reading', () => {
+  const withGoal = (goal: number, reading: Partial<Settings['reading']> = {}): Settings =>
+    migrateSettings({ reading: { goal, ...reading } })
+
+  test('pages read count toward the day, each once, and a new day starts afresh', () => {
+    let settings = withGoal(3)
+    settings = countPage(settings, 10, '2026-10-20', meta).settings
+    settings = countPage(settings, 10, '2026-10-20', meta).settings
+    settings = countPage(settings, 11, '2026-10-20', meta).settings
+    expect(settings.reading.today).toEqual([10, 11])
+    settings = countPage(settings, 12, '2026-10-21', meta).settings
+    expect(settings.reading).toMatchObject({ day: '2026-10-21', today: [12], khatma: [10, 11, 12] })
+  })
+
+  test('meeting the goal says so once, and the streak runs on from yesterday or starts again', () => {
+    const first = countPage(withGoal(1, { streak: 4, streakDay: '2026-10-19' }), 7, '2026-10-20', meta)
+    expect(first.done.goal).toBe(true)
+    expect(first.settings.reading).toMatchObject({ streak: 5, streakDay: '2026-10-20' })
+    expect(countPage(first.settings, 8, '2026-10-20', meta).done.goal).toBe(false)
+    expect(currentStreak(first.settings.reading, '2026-10-21')).toBe(5)
+    expect(currentStreak(first.settings.reading, '2026-10-22')).toBe(0)
+
+    const afterGap = countPage(withGoal(1, { streak: 4, streakDay: '2026-10-17' }), 7, '2026-10-20', meta)
+    expect(afterGap.settings.reading.streak).toBe(1)
+    // Across a month's end.
+    expect(countPage(withGoal(1, { streak: 2, streakDay: '2026-09-30' }), 7, '2026-10-01', meta).settings.reading.streak).toBe(3)
+  })
+
+  test('the last page of a juz completes it, and the last page of the Mushaf the khatma', () => {
+    const juz1 = meta.pages.flatMap((info, i) => (info.juz === 1 ? [i + 1] : []))
+    const last = juz1.at(-1) ?? 0
+    const nearly = withGoal(0, { khatma: juz1.slice(0, -1) })
+    expect(countPage(nearly, last, '2026-10-20', meta).done.juz).toEqual([1])
+    expect(countPage(nearly, 300, '2026-10-20', meta).done.juz).toEqual([])
+
+    const all = Array.from({ length: 604 }, (_, i) => i + 1)
+    const done = countPage(withGoal(0, { khatma: all.slice(0, -1) }), 604, '2026-10-20', meta)
+    expect(done.done).toMatchObject({ khatma: true, juz: [30] })
+    expect(done.settings.reading).toMatchObject({ khatma: [], khatmas: 1 })
+  })
+})
+
+describe('tafsir and recitation', () => {
+  test('ayahs step on across surahs, and stop at the first and the last', () => {
+    expect(stepAyah(meta, { surah: 2, ayah: 286 }, 1)).toEqual({ surah: 3, ayah: 1 })
+    expect(stepAyah(meta, { surah: 3, ayah: 1 }, -1)).toEqual({ surah: 2, ayah: 286 })
+    expect(stepAyah(meta, { surah: 1, ayah: 1 }, -1)).toBeUndefined()
+    expect(stepAyah(meta, { surah: 114, ayah: 6 }, 1)).toBeUndefined()
+  })
+
+  test('the tafsir follows the interface language until one is chosen', () => {
+    expect(tafsirOf(migrateSettings({ language: 'ar' }))).toBe('muyassar')
+    expect(tafsirOf(migrateSettings({ language: 'en' }))).toBe('ibn-kathir-en')
+    expect(tafsirOf(migrateSettings({ language: 'en', tafsir: 'saadi' }))).toBe('saadi')
+  })
+
+  test('the reciter, the tafsir and the last ayah are kept; unknown ones dropped', () => {
+    expect(migrateSettings({ reciter: 'husary', tafsir: 'ibn-kathir-ar', lastAyah: { surah: 2, ayah: 255 }, pageSound: true })).toMatchObject({
+      reciter: 'husary',
+      tafsir: 'ibn-kathir-ar',
+      lastAyah: { surah: 2, ayah: 255 },
+      pageSound: true,
+    })
+    expect(migrateSettings({ reciter: 'someone', tafsir: 'jalalayn', lastAyah: { surah: 115, ayah: 1 } })).toMatchObject({
+      reciter: 'alafasy',
+      tafsir: null,
+      lastAyah: null,
+    })
   })
 })

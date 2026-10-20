@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 
 import {
   bookmarksOn,
   clampPage,
+  countPage,
   findBookmark,
+  localDay,
   migrateSettings,
   spreadOf,
   toggleBookmark,
@@ -11,24 +13,79 @@ import {
   type AyahRef,
   type Settings,
   type Theme,
+  type ThemeChoice,
 } from '@mushaf/core'
-import { BookMarked, Bookmark, BookOpen, ChevronLeft, ChevronRight, Columns2, Minus, Moon, Plus, RectangleVertical, Settings2, Sun, SunMoon } from 'lucide-react'
+import { BookMarked, Bookmark, BookOpen, ChevronLeft, ChevronRight, Columns2, Contrast, Minus, Moon, Plus, RectangleVertical, Settings2, Sun, SunMoon } from 'lucide-react'
 
 import { AgentAlerts, AgentChip, useAgents, useOpenPlace } from './Agents.tsx'
 import { Book } from './Book.tsx'
 
-import { AyahMenu, PageSlider, Toasts, type Picked, type ToastMessage } from './Chrome.tsx'
+import { AyahMenu, PageSlider, Toasts, WirdRing, type Picked, type ToastMessage } from './Chrome.tsx'
 import { ReaderContext, digitsFor, type ReaderState } from './context.tsx'
 import { loadFont } from './fonts.ts'
 import { fitFontSize, prefersSpread } from './geometry.ts'
 import { stringsFor } from './i18n.ts'
 import { MushafPage, SURAH_NAMES_FAMILY } from './MushafPage.tsx'
 import type { MoveKind, Platform, ReaderData } from './platform.ts'
+import { RecitationBar, useRecitation } from './Recitation.tsx'
 import { SearchBox } from './SearchBox.tsx'
 import { SidePanel, type PanelTab } from './SidePanel.tsx'
+import { rustle } from './sound.ts'
 
-const THEMES: Theme[] = ['day', 'sepia', 'night']
+const THEMES: ThemeChoice[] = ['day', 'sepia', 'night', 'auto']
 const ZOOM_STEP = 0.1
+/** A page counts as read once it has been in view this long. */
+const READ_MS = 20_000
+/** In focus mode, the bars fade once the mouse and keys have rested this long. */
+const CALM_MS = 3000
+const SYSTEM_DARK = '(prefers-color-scheme: dark)'
+
+/** Whether the system is set to dark, as it changes. */
+function useSystemDark() {
+  const [dark, setDark] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia(SYSTEM_DARK).matches)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') {
+      return
+    }
+    const query = window.matchMedia(SYSTEM_DARK)
+    const onChange = () => setDark(query.matches)
+    query.addEventListener('change', onChange)
+
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+
+  return dark
+}
+
+/** True once the mouse and keys have rested `ms`, while `enabled`. */
+function useIdle(ms: number, enabled: boolean) {
+  const [idle, setIdle] = useState(false)
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    let timer = setTimeout(() => setIdle(true), ms)
+    const wake = () => {
+      setIdle(false)
+      clearTimeout(timer)
+      timer = setTimeout(() => setIdle(true), ms)
+    }
+    const events = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const
+    for (const event of events) {
+      window.addEventListener(event, wake, { passive: true })
+    }
+
+    return () => {
+      clearTimeout(timer)
+      setIdle(false)
+      for (const event of events) {
+        window.removeEventListener(event, wake)
+      }
+    }
+  }, [ms, enabled])
+
+  return idle
+}
 
 /** Watches an element's size. */
 function useSize<T extends HTMLElement>() {
@@ -187,7 +244,7 @@ export interface ReaderProps {
   onNavigate?: (page: number, kind: MoveKind) => void
 }
 
-/** The whole reader: pages, turning, search and go to, the index, bookmarks, themes and zoom. */
+/** The whole reader: pages, turning, search and go to, the index, bookmarks, themes, zoom, focus and the wird. */
 export function Reader({ data, platform, settings: stored, openAt, banner, onNavigate }: ReaderProps) {
   const [settings, setSettings] = useState<Settings>(() => migrateSettings(stored))
   const [active, setActive] = useState<AyahRef>()
@@ -195,10 +252,13 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
   const [panel, setPanel] = useState<PanelTab>()
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [searchFocus, setSearchFocus] = useState(0)
+  const [tafsirAyah, setTafsirAyah] = useState<AyahRef>()
   const [viewRef, view] = useSize<HTMLDivElement>()
   const t = stringsFor(settings.language)
   const n = useMemo(() => digitsFor(settings.language), [settings.language])
   const lineEm = data.layout.lineEm
+  const systemDark = useSystemDark()
+  const theme: Theme = settings.theme === 'auto' ? (systemDark ? 'night' : 'day') : settings.theme
 
   const update = useCallback((change: (current: Settings) => Settings) => setSettings(current => change(current)), [])
   const setPage = useCallback((page: number) => update(current => ({ ...current, page: clampPage(page) })), [update])
@@ -242,6 +302,9 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
     [data.meta.surahs, settings.language],
   )
 
+  const recitation = useRecitation(platform.library, settings.reciter, () => toast(t.recitationFailed))
+  const { heard } = recitation
+
   // Save a moment after the last change, not on every page turned.
   useEffect(() => {
     const timer = setTimeout(() => void platform.saveSettings(settings), 400)
@@ -272,6 +335,71 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
     latest.current.onNavigate?.(latest.current.lastInView, move.current)
   }, [settings.page])
 
+  // Opened where the reader stopped last time, that ayah is shown, once.
+  const welcomed = useRef(false)
+  useEffect(() => {
+    if (welcomed.current) {
+      return
+    }
+    welcomed.current = true
+    const place = settings.lastAyah
+    const page = place ? data.meta.ayahPages[place.surah - 1]?.[place.ayah - 1] : undefined
+    const shownAtStart = settings.spread === 'single' ? [settings.page] : spreadOf(settings.page)
+    if (openAt || !place || page === undefined || !shownAtStart.includes(page)) {
+      return
+    }
+    setActive(place)
+    toast(t.continueFrom(t.ayahOf(surahName(place.surah), n(place.ayah))))
+  }, [settings, data.meta, openAt, toast, t, n, surahName])
+
+  // The page each word is on, for a recitation to turn the page as it reaches the next.
+  const pageOfWord = useMemo(() => {
+    const pages = new Map<string, number>()
+    data.layout.pages.forEach((one, i) => {
+      for (const line of one.lines) {
+        if (line.t === 'ayah') {
+          for (const [s, a, position] of line.w) {
+            pages.set(`${s}:${a}:${position}`, i + 1)
+          }
+        }
+      }
+    })
+
+    return pages
+  }, [data.layout])
+
+  // A page in view a while has been read: it counts toward the day's goal and the khatma.
+  const inView = pages.join()
+  const readState = useRef({ settings, toast, t, n })
+  readState.current = { settings, toast, t, n }
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (document.visibilityState === 'hidden') {
+        return
+      }
+      const { toast, t, n } = readState.current
+      const day = localDay(new Date())
+      let next = readState.current.settings
+      for (const page of inView.split(',').map(Number)) {
+        const counted = countPage(next, page, day, data.meta)
+        next = counted.settings
+        if (counted.done.goal) {
+          toast(t.goalMet)
+        }
+        if (counted.done.khatma) {
+          toast(t.khatmaDone)
+        } else {
+          counted.done.juz.forEach(juz => toast(t.juzDone(n(juz))))
+        }
+      }
+      if (next !== readState.current.settings) {
+        update(() => next)
+      }
+    }, READ_MS)
+
+    return () => clearTimeout(timer)
+  }, [inView, data.meta, update])
+
   // Fetch the fonts of the pages either side, so turning shows a drawn page at once.
   useEffect(() => {
     for (const near of [1, 2, -1, -2, 3, -3]) {
@@ -281,6 +409,9 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
   }, [settings.page, data.manifest, platform])
 
   const go = (by: number) => {
+    if (settings.pageSound && !recitation.isPlaying) {
+      rustle()
+    }
     move.current = 'turn'
     setActive(undefined)
     setPicked(undefined)
@@ -308,6 +439,62 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
   const zoom = (by: number) =>
     update(current => ({ ...current, zoom: Math.min(3, Math.max(0.5, Math.round((current.zoom + by) * 10) / 10)) }))
   const togglePanel = (tab: PanelTab) => setPanel(current => (current === tab ? undefined : tab))
+  const showTafsir = (ayah: AyahRef) => {
+    setTafsirAyah(ayah)
+    setPicked(undefined)
+    setPanel('tafsir')
+  }
+  const firstAyahHere = (): AyahRef => {
+    const word = data.layout.pages[settings.page - 1]?.lines.flatMap(line => (line.t === 'ayah' ? line.w : [])).at(0)
+
+    return { surah: word?.[0] ?? 1, ayah: word?.[1] ?? 1 }
+  }
+  const toggleRecitation = () => {
+    if (!platform.library) {
+      return
+    }
+    if (!recitation.isOn) {
+      void recitation.start(active ?? firstAyahHere())
+    } else if (recitation.isPlaying) {
+      recitation.pause()
+    } else {
+      recitation.resume()
+    }
+  }
+
+  // The recitation turns the page when the word heard is on the next one, and is where the reader is.
+  const following = useRef({ pages, isSpread, go, open, page: settings.page })
+  following.current = { pages, isSpread, go, open, page: settings.page }
+  useEffect(() => {
+    if (!heard) {
+      return
+    }
+    const page = pageOfWord.get(`${heard.surah}:${heard.ayah}:${heard.word ?? 1}`)
+    const { pages: inView, isSpread: spread, go: turnPage, open: openPage, page: current } = following.current
+    if (page === undefined || inView.includes(page)) {
+      return
+    }
+    const ahead = turn(current, 1, spread)
+    if ((spread ? spreadOf(ahead) : [ahead]).includes(page)) {
+      turnPage(1)
+    } else {
+      openPage(page)
+    }
+  }, [heard, pageOfWord])
+  useEffect(() => {
+    if (heard) {
+      update(current =>
+        current.lastAyah?.surah === heard.surah && current.lastAyah.ayah === heard.ayah
+          ? current
+          : { ...current, lastAyah: { surah: heard.surah, ayah: heard.ayah } },
+      )
+    }
+  }, [heard, update])
+  const toggleFocus = () => {
+    toast(settings.focusMode ? t.focusOff : t.focusOn)
+    update(current => ({ ...current, focusMode: !current.focusMode }))
+  }
+  const calm = useIdle(CALM_MS, settings.focusMode) && !panel && !picked
 
   // A Mushaf turns leftward: ← is the next page, → the one before.
   useEffect(() => {
@@ -340,6 +527,9 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
         '-': () => zoom(-ZOOM_STEP),
         '0': () => update(current => ({ ...current, zoom: 1 })),
         d: cycleTheme,
+        f: toggleFocus,
+        t: () => (panel === 'tafsir' ? setPanel(undefined) : platform.library && showTafsir(active ?? tafsirAyah ?? firstAyahHere())),
+        p: toggleRecitation,
         b: toggleHere,
         i: () => togglePanel('surahs'),
         m: () => togglePanel('bookmarks'),
@@ -364,11 +554,18 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
   const juzOnPage = data.meta.pages[settings.page - 1]?.juz ?? 1
 
   const state: ReaderState = { data, platform, settings, update, t, n, surahName, open, toast }
-  const ThemeIcon = settings.theme === 'night' ? Moon : settings.theme === 'sepia' ? SunMoon : Sun
+  const ThemeIcon = { day: Sun, sepia: SunMoon, night: Moon, auto: Contrast }[settings.theme]
+  const paperTone = { '--warmth': settings.paper.warmth, '--dim': settings.paper.dim } as CSSProperties
 
   return (
     <ReaderContext.Provider value={state}>
-      <div className="reader" data-theme={settings.theme} dir={settings.language === 'ar' ? 'rtl' : 'ltr'} lang={settings.language}>
+      <div
+        className={`reader${calm ? ' is-calm' : ''}`}
+        data-theme={theme}
+        style={paperTone}
+        dir={settings.language === 'ar' ? 'rtl' : 'ltr'}
+        lang={settings.language}
+      >
         <header className="top-bar">
           <div className="top-bar-start">
             <span className="brand" aria-label={t.appName}>
@@ -383,6 +580,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
                 {t.juz} {n(juzOnPage)} · {t.page} {n(settings.page)}
               </span>
             </button>
+            <WirdRing onClick={() => togglePanel('settings')} />
             <AgentChip sessions={agents.sessions} pausedUntil={agents.pausedUntil} onClick={() => togglePanel('settings')} />
           </div>
           <SearchBox focusKey={searchFocus} />
@@ -426,6 +624,11 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
         <div className="body">
           {panel ? (
             <SidePanel
+              tafsirAyah={tafsirAyah}
+              onTafsirAyah={ayah => {
+                setTafsirAyah(ayah)
+                open(data.meta.ayahPages[ayah.surah - 1]?.[ayah.ayah - 1] ?? settings.page, ayah)
+              }}
               tab={panel}
               onTab={setPanel}
               onClose={() => setPanel(undefined)}
@@ -474,6 +677,7 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
                       fontSize={fontSize}
                       active={active}
                       bookmarks={bookmarksOn(settings, [page])}
+                      heard={heard}
                       onPickAyah={(ayah, x, y) => {
                         // A second click on the picked ayah lets it go.
                         if (active?.surah === ayah.surah && active.ayah === ayah.ayah) {
@@ -483,6 +687,10 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
                         }
                         setActive(ayah)
                         setPicked({ ayah, page, x, y })
+                        update(current => ({ ...current, lastAyah: ayah }))
+                        if (panel === 'tafsir') {
+                          setTafsirAyah(ayah)
+                        }
                       }}
                       loadingText={t.loading}
                     />
@@ -493,7 +701,30 @@ export function Reader({ data, platform, settings: stored, openAt, banner, onNav
           </main>
         </div>
         <PageSlider page={settings.page} onPage={page => open(page)} />
-        {picked ? <AyahMenu picked={picked} onClose={() => setPicked(undefined)} onCopied={unpick} /> : null}
+        <RecitationBar recitation={recitation} />
+        {picked ? (
+          <AyahMenu
+            picked={picked}
+            onClose={() => setPicked(undefined)}
+            onCopied={unpick}
+            onTafsir={
+              platform.library
+                ? () => {
+                    showTafsir(picked.ayah)
+                    setPicked(undefined)
+                  }
+                : undefined
+            }
+            onListen={
+              platform.library
+                ? () => {
+                    void recitation.start(picked.ayah)
+                    setPicked(undefined)
+                  }
+                : undefined
+            }
+          />
+        ) : null}
         <Toasts toasts={toasts} onDone={id => setToasts(current => current.filter(one => one.id !== id))} />
       </div>
     </ReaderContext.Provider>
