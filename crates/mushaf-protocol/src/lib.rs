@@ -83,6 +83,12 @@ pub struct AgentEvent {
     pub transcript: Option<String>,
     /// ms since the epoch, when the hook ran.
     pub at: u64,
+    /// The process-ancestor pids of the hook, nearest first (the agent, its
+    /// shell, the terminal …). Lets the app raise the agent's own terminal on
+    /// "back to work". Pids only — no command lines, nothing else. Empty when
+    /// the platform or hook can't read them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub term: Vec<u32>,
 }
 
 /// Agents that have their own normalizer. Any other id is treated as generic.
@@ -180,6 +186,8 @@ pub fn normalize(agent: &str, payload: &Value, forced: Option<Kind>, now_ms: u64
         project: folder.and_then(folder_name),
         transcript: transcript.map(str::to_owned),
         at: now_ms,
+        // The hook fills this in from its own process tree before sending.
+        term: Vec::new(),
     })
 }
 

@@ -356,7 +356,7 @@ mod tests {
     use mushaf_engine::Alert;
 
     fn alert(agent: &str, kind: AlertKind, project: &str) -> Alert {
-        Alert { agent: agent.into(), project: Some(project.into()), kind, at: 0, worked_ms: None, banner: false, notify: true, sound: false }
+        Alert { agent: agent.into(), project: Some(project.into()), kind, at: 0, worked_ms: None, banner: false, notify: true, sound: false, session: String::new(), term: vec![] }
     }
 
     #[test]

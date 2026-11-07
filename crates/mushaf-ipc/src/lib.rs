@@ -224,7 +224,7 @@ mod tests {
             })
         });
 
-        let event = AgentEvent { v: 1, agent: "claude".into(), session: "s".into(), kind: Kind::Started, project: None, transcript: None, at: 1 };
+        let event = AgentEvent { v: 1, agent: "claude".into(), session: "s".into(), kind: Kind::Started, project: None, transcript: None, at: 1, term: vec![] };
         assert!(send(&MUSHAF, &Request::Event(event)).unwrap().ok);
         assert!(send(&MUSHAF, &Request::Open { place: Some("2:255".into()) }).unwrap().ok);
         assert_eq!(send(&MUSHAF, &Request::Status).unwrap().sessions, Some(vec![]));

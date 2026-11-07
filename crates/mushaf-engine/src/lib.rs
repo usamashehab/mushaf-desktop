@@ -21,8 +21,10 @@ use serde_json::Value;
 const FORGET_AFTER_MS: u64 = 6 * 60 * 60 * 1000;
 /// How often the transcripts are looked at for a task the user interrupted.
 const CHECK_EVERY_MS: u64 = 5_000;
-/// The user counts as waiting after this long without a key or the mouse.
-pub const IDLE_MS: u64 = 30_000;
+/// The user counts as waiting after this long without a key or the mouse. Long
+/// enough that reading or watching an agent work between keystrokes doesn't read
+/// as "away" and open the app under the user's hands.
+pub const IDLE_MS: u64 = 120_000;
 /// An agent's question holds the app back until the user next touches the
 /// keyboard or mouse (most likely to answer it: no hook says so), or this long
 /// when the system can't tell.
@@ -138,11 +140,16 @@ pub enum AlertKind {
 #[serde(rename_all = "camelCase")]
 pub struct Alert {
     pub agent: String,
+    /// The agent's session id, so "back to work" can target this exact agent.
+    pub session: String,
     pub project: Option<String>,
     pub kind: AlertKind,
     pub at: u64,
     /// How long the agent worked on it, when known.
     pub worked_ms: Option<u64>,
+    /// The agent's terminal (process-ancestor pids), to raise it on "back to work".
+    #[serde(skip)]
+    pub term: Vec<u32>,
     #[serde(skip)]
     pub banner: bool,
     #[serde(skip)]
@@ -177,6 +184,10 @@ struct Tracked {
     started_at: u64,
     due: Option<u64>,
     opened: bool,
+    /// The agent's terminal, as process-ancestor pids (see `AgentEvent::term`),
+    /// so "back to work" can raise it. Kept fresh from each event.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    term: Vec<u32>,
 }
 
 /// A task at work as the app keeps it across a restart.
@@ -273,7 +284,14 @@ impl Engine {
                 let due = (agent.enabled && minutes > 0.0).then(|| now + (minutes * 60_000.0) as u64);
                 self.sessions.insert(
                     key,
-                    Tracked { project: event.project.clone(), transcript: event.transcript.clone(), started_at: now, due, opened: false },
+                    Tracked {
+                        project: event.project.clone(),
+                        transcript: event.transcript.clone(),
+                        started_at: now,
+                        due,
+                        opened: false,
+                        term: event.term.clone(),
+                    },
                 );
                 actions.push(Action::Sessions);
             }
@@ -292,12 +310,21 @@ impl Engine {
                     let notify = if banner { prefs.notify && !window.focused } else { prefs.notify_when_closed };
                     // One chime for alerts that come together.
                     let chime = prefs.sound && self.last_chime.is_none_or(|at| now.saturating_sub(at) >= BATCH_MS);
+                    // Prefer the terminal the event just reported; fall back to the one
+                    // remembered from when the task started.
+                    let term = if event.term.is_empty() {
+                        tracked.as_ref().map(|t| t.term.clone()).unwrap_or_default()
+                    } else {
+                        event.term.clone()
+                    };
                     let alert = Alert {
                         agent: event.agent.clone(),
+                        session: event.session.clone(),
                         project: event.project.clone().or_else(|| tracked.as_ref().and_then(|t| t.project.clone())),
                         kind,
                         at: now,
                         worked_ms: tracked.map(|t| now.saturating_sub(t.started_at)),
+                        term,
                         banner,
                         notify,
                         sound: chime,
@@ -434,7 +461,7 @@ mod tests {
     const FRONT: WindowState = WindowState { visible: true, focused: true };
 
     fn event(kind: Kind, session: &str) -> AgentEvent {
-        AgentEvent { v: 1, agent: "claude".into(), session: session.into(), kind, project: Some("shop".into()), transcript: None, at: 0 }
+        AgentEvent { v: 1, agent: "claude".into(), session: session.into(), kind, project: Some("shop".into()), transcript: None, at: 0, term: vec![] }
     }
 
     const NO: Interrupted = &|_, _, _| false;
@@ -516,8 +543,8 @@ mod tests {
         assert_eq!(engine.sessions().len(), 1);
         // Not over the question: the user hasn't touched anything since it came.
         assert!(!opens(&engine.on_tick(2 * MIN, &prefs, HIDDEN, Some(MIN + 5_000), NO)));
-        // They answered it, then sat back.
-        assert_eq!(engine.on_tick(2 * MIN + 40_000, &prefs, HIDDEN, Some(40_000), NO)[0], Action::Open { focus: true });
+        // They answered it, then sat back long enough to count as away.
+        assert_eq!(engine.on_tick(MIN + IDLE_MS, &prefs, HIDDEN, Some(IDLE_MS), NO)[0], Action::Open { focus: true });
     }
 
     #[test]

@@ -116,7 +116,9 @@ fn hook(app: &AppId, agent: &str, kind: Option<&str>) {
         }
     }
     let forced = kind.and_then(Kind::parse);
-    let Some(event) = normalize(agent, &payload, forced, now_ms()) else { return };
+    let Some(mut event) = normalize(agent, &payload, forced, now_ms()) else { return };
+    // Remember the agent's terminal, so "back to work" can raise it later.
+    event.term = terminal_ancestors();
     let starts = event.kind == Kind::Started;
     let request = Request::Event(event);
     if mushaf_ipc::send(app, &request).is_ok() {
@@ -133,6 +135,34 @@ fn hook(app: &AppId, agent: &str, kind: Option<&str>) {
     if launch_app(app, true).is_ok() {
         let _ = send_until(app, &request, Instant::now() + Duration::from_millis(2500));
     }
+}
+
+/// The hook's process-ancestor pids, nearest first (the agent, its shell, the
+/// terminal …), up to the session root. Pids only, so the app can raise the
+/// agent's terminal on "back to work". Empty off Linux.
+#[cfg(target_os = "linux")]
+fn terminal_ancestors() -> Vec<u32> {
+    let mut pids = Vec::new();
+    let mut pid = std::process::id();
+    for _ in 0..24 {
+        let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else { break };
+        // "pid (comm) state ppid …" — comm may hold spaces or ')', so read past the last ')'.
+        let Some(rest) = stat.rsplit(')').next() else { break };
+        let mut fields = rest.split_whitespace();
+        let _state = fields.next();
+        let Some(ppid) = fields.next().and_then(|p| p.parse::<u32>().ok()) else { break };
+        if ppid <= 1 {
+            break;
+        }
+        pids.push(ppid);
+        pid = ppid;
+    }
+    pids
+}
+
+#[cfg(not(target_os = "linux"))]
+fn terminal_ancestors() -> Vec<u32> {
+    Vec::new()
 }
 
 /// The log of the Antigravity CLI holding a conversation: of the latest few,
