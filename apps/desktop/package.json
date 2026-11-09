@@ -1,6 +1,6 @@
 {
   "name": "@mushaf/desktop",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "The Mushaf desktop app: the reader in a Tauri shell.",
   "type": "module",
