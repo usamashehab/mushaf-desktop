@@ -71,6 +71,27 @@ describe('the bridge to the app', () => {
     channel.port1.close()
   })
 
+  test('fetches through the app and gets the reply, or an error when the app could not get it', async () => {
+    const { window, post } = frame()
+    const { channel, sent } = host()
+    const bridge = connect(window)
+    post({ ...init, fetch: true }, [channel.port2])
+    const made = await bridge
+    expect(made.init.fetch).toBe(true)
+    const tafsir = made.fetch('https://api.quran.com/api/v4/tafsirs/16/by_ayah/1:1')
+    const failed = made.fetch('https://api.quran.com/none').catch((error: unknown) => error)
+    await tick()
+    expect(sent).toEqual([
+      { type: 'fetch', id: 1, url: 'https://api.quran.com/api/v4/tafsirs/16/by_ayah/1:1' },
+      { type: 'fetch', id: 2, url: 'https://api.quran.com/none' },
+    ])
+    channel.port1.postMessage({ type: 'fetched', id: 2, body: null })
+    channel.port1.postMessage({ type: 'fetched', id: 1, body: '{"tafsir":{}}' })
+    expect(await tafsir).toBe('{"tafsir":{}}')
+    expect(await failed).toBeInstanceOf(Error)
+    channel.port1.close()
+  })
+
   test('passes on the page and the state to keep, but not a state too big to keep', async () => {
     const { window, post } = frame()
     const { channel, sent } = host()

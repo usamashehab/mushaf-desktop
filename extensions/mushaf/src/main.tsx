@@ -20,6 +20,7 @@ import manifest from '../../../data/packs/qcf-v2/manifest.json' with { type: 'js
 import meta from '../../../data/quran-meta.json' with { type: 'json' }
 import searchText from '../../../data/search-text.json' with { type: 'json' }
 
+import { quranComLibrary } from '../../../apps/desktop/src/library.ts'
 import { connect, type Bridge } from './bridge.ts'
 import { startingSettings } from './settings.ts'
 
@@ -28,6 +29,16 @@ const data: ReaderData = {
   manifest: manifest as PackManifest,
   layout: layout as PackLayout,
   searchText: searchText as SearchText,
+}
+
+/** `fetch` for the Quran.com client, through the app: a failure is a 502 reply. */
+function throughApp(bridge: Bridge): typeof fetch {
+  return async input => {
+    const url = input instanceof Request ? input.url : String(input)
+    const body = await bridge.fetch(url).catch(() => null)
+
+    return body === null ? new Response(null, { status: 502 }) : new Response(body, { headers: { 'Content-Type': 'application/json' } })
+  }
 }
 
 function App({ bridge }: { bridge: Bridge }) {
@@ -39,6 +50,8 @@ function App({ bridge }: { bridge: Bridge }) {
       extraFont: (pack, which) => () => bridge.asset(`fonts/${extraFontPath(pack, which)}`),
       loadSettings: async () => settings,
       saveSettings: async next => bridge.send({ type: 'state', data: next }),
+      // Tafsir and recitation, where the app fetches for the frame (it has no network of its own).
+      ...(bridge.init.fetch ? { library: quranComLibrary(throughApp(bridge)) } : {}),
     }),
     [bridge, settings],
   )

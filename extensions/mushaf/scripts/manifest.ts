@@ -14,6 +14,7 @@ import { fontFiles, type PackManifest } from '@mushaf/packs'
 
 import pack from '../../../data/packs/qcf-v2/manifest.json' with { type: 'json' }
 import about from '../package.json' with { type: 'json' }
+import { QURAN_COM_ORIGINS } from '../../../apps/desktop/src/library.ts'
 import { API } from '../src/protocol.ts'
 
 const DIST = join(import.meta.dirname, '..', 'dist')
@@ -34,6 +35,8 @@ const manifest = {
   unit: 'pages',
   pages: (pack as PackManifest).pages,
   entry: { path: 'index.html', url: `${base}/${PAGE}`, size: page.length, sha256: createHash('sha256').update(page).digest('hex') },
+  // Tafsir and translation the app fetches for the page, and the recitations its frame may play.
+  network: QURAN_COM_ORIGINS,
   assets: fontFiles(pack as PackManifest).map(file => ({ path: `fonts/${file.name}`, url: file.url, size: file.size, sha256: file.sha256 })),
 }
 

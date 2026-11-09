@@ -13,6 +13,8 @@ export interface Init {
   state: unknown
   language: 'ar' | 'en'
   theme: 'light' | 'dark'
+  /** The app answers `fetch` (for the addresses the extension's manifest lists under `network.connect`). */
+  fetch?: boolean
 }
 
 /** App → extension. `init` comes first, by `postMessage` with the port; the rest over the port. */
@@ -22,6 +24,8 @@ export type HostMessage =
   | { type: 'open'; place: string }
   /** The answer to `needAsset`: the file's bytes, or null when the app doesn't have it. */
   | { type: 'asset'; id: number; bytes: ArrayBuffer | null }
+  /** The answer to `fetch`: the reply's text, or null when the app couldn't get it. */
+  | { type: 'fetched'; id: number; body: string | null }
 
 /** Extension → app, over the port. */
 export type ExtensionMessage =
@@ -36,6 +40,8 @@ export type ExtensionMessage =
   | { type: 'state'; data: unknown }
   /** One of the files listed in the extension's `assets`, by its path. */
   | { type: 'needAsset'; id: number; path: string }
+  /** A GET of one of the addresses the manifest lists under `network.connect`, by an app whose `init` says `fetch`. */
+  | { type: 'fetch'; id: number; url: string }
 
 export const MAX_STATE = 64 * 1024
 
@@ -56,6 +62,8 @@ export function isHostMessage(data: unknown): data is HostMessage {
       return typeof message['place'] === 'string'
     case 'asset':
       return Number.isInteger(message['id']) && (message['bytes'] === null || message['bytes'] instanceof ArrayBuffer)
+    case 'fetched':
+      return Number.isInteger(message['id']) && (message['body'] === null || typeof message['body'] === 'string')
     default:
       return false
   }

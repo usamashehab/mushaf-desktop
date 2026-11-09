@@ -6,6 +6,8 @@ export interface Bridge {
   send(message: ExtensionMessage): void
   /** A file of the extension's assets, from the app. */
   asset(path: string): Promise<ArrayBuffer>
+  /** A GET through the app (when its `init` says `fetch`): the reply's text. */
+  fetch(url: string): Promise<string>
   /** Places the user asked for after the start. */
   onOpen(listener: (place: string) => void): void
 }
@@ -31,6 +33,7 @@ export function connect(window: Window): Promise<Bridge> {
 
 function bridge(init: Init, port: MessagePort): Bridge {
   const waiting = new Map<number, { resolve: (bytes: ArrayBuffer) => void; reject: (error: Error) => void }>()
+  const fetching = new Map<number, { resolve: (body: string) => void; reject: (error: Error) => void }>()
   const opens: ((place: string) => void)[] = []
   let next = 1
   port.onmessage = (event: MessageEvent) => {
@@ -45,6 +48,14 @@ function bridge(init: Init, port: MessagePort): Bridge {
         asked?.resolve(message.bytes)
       } else {
         asked?.reject(new Error('the app has no such file'))
+      }
+    } else if (message.type === 'fetched') {
+      const asked = fetching.get(message.id)
+      fetching.delete(message.id)
+      if (message.body === null) {
+        asked?.reject(new Error('the app could not fetch it'))
+      } else {
+        asked?.resolve(message.body)
       }
     } else if (message.type === 'open') {
       opens.forEach(listener => listener(message.place))
@@ -65,6 +76,12 @@ function bridge(init: Init, port: MessagePort): Bridge {
         const id = next++
         waiting.set(id, { resolve, reject })
         send({ type: 'needAsset', id, path })
+      }),
+    fetch: url =>
+      new Promise((resolve, reject) => {
+        const id = next++
+        fetching.set(id, { resolve, reject })
+        send({ type: 'fetch', id, url })
       }),
     onOpen: listener => {
       opens.push(listener)

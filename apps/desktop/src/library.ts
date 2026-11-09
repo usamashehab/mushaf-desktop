@@ -5,6 +5,8 @@ import type { Library, Recitation, TafsirPassage } from '@mushaf/reader'
 // recitation from its CDN's API, the audio from quranicaudio.com. All allow any origin.
 const API = 'https://api.quran.com/api/v4'
 const QDC = 'https://api.qurancdn.com/api/qdc'
+/** Where the library reaches: its APIs, and where the recitations play from. */
+export const QURAN_COM_ORIGINS = { connect: ['https://api.quran.com', 'https://api.qurancdn.com'], media: ['https://download.quranicaudio.com'] }
 
 /** Quran.com's resource ids. */
 const TAFSIR_RESOURCES: Record<TafsirId, number> = {
